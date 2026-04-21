@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_access_token_ttl_minutes: int = Field(default=60, alias="JWT_ACCESS_TOKEN_TTL_MINUTES")
 
-    mongodb_url: str = Field(default="", alias="MONGODB_URL")
+    mongodb_uri: str = Field(default="", alias="MONGODB_URI")
     mongodb_database: str = Field(default="argos", alias="MONGODB_DATABASE")
+    mongodb_test_database: str = Field(default="argos_test", alias="MONGODB_TEST_DATABASE")
 
     admin_email: str = Field(default="", alias="ADMIN_EMAIL")
     admin_password_hash: str = Field(default="", alias="ADMIN_PASSWORD_HASH")

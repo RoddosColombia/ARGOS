@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault("ARGOS_ENV", "dev")
-os.environ.setdefault("JWT_SECRET", "test-secret-only-for-pytest-never-in-prod")
-os.environ.setdefault("JWT_ALGORITHM", "HS256")
-os.environ.setdefault("JWT_ACCESS_TOKEN_TTL_MINUTES", "60")
-os.environ.setdefault("MONGODB_URL", "")
+# ─── Unit-test bootstrap ─────────────────────────────────────────────────
+# Forzamos vars antes de importar argos.config para que las settings queden
+# aisladas de cualquier .env local. Integration tests sobreescriben MONGODB_URI
+# explícitamente en su propio fixture (ver test_integration_mongo.py).
+os.environ["ARGOS_ENV"] = "dev"
+os.environ["JWT_SECRET"] = "test-secret-only-for-pytest-never-in-prod"
+os.environ["JWT_ALGORITHM"] = "HS256"
+os.environ["JWT_ACCESS_TOKEN_TTL_MINUTES"] = "60"
+os.environ["MONGODB_URI"] = ""
+os.environ["MONGODB_DATABASE"] = "argos_test"
 os.environ.setdefault("ADMIN_EMAIL", "ceo-test@roddos.com")
 os.environ.setdefault("ADMIN_ROLE", "ceo")
 os.environ.setdefault("ADMIN_WORKSPACE_ID", "RODDOS")
@@ -35,7 +40,8 @@ def _clear_settings_cache():
 @pytest.fixture
 def client() -> TestClient:
     app = create_app()
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 @pytest.fixture

@@ -1,0 +1,118 @@
+# ─── Python ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+build/
+dist/
+develop-eggs/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# ─── Node / Frontend ─────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.yarn/
+.npm/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.vite/
+.turbo/
+.cache/
+
+# TypeScript
+*.tsbuildinfo
+
+# ─── IDEs ────────────────────────────────────────────────────────────
+.vscode/
+!.vscode/settings.example.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# ─── OS ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Windows temp / Office lock files
+~$*
+*.lnk
+
+# ─── Secrets y entorno ───────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+service-account*.json
+
+# ─── Logs ────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ─── ARGOS específico ────────────────────────────────────────────────
+# Artefactos de scraping / caché local de Apify / ProxyRack
+.scrape_cache/
+.proxy_cache/
+
+# Modelos XGBoost serializados locales (en producción viven en Render Persistent Disk)
+models/*.joblib
+models/*.pkl
+
+# Baselines temporales
+.baseline_temp/
+
+# Langfuse / observabilidad local
+.langfuse/
+
+# Claude Code local state (configuración por-máquina)
+.claude/settings.local.json

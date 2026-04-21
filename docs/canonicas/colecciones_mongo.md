@@ -1,0 +1,402 @@
+# docs/canonicas/colecciones_mongo.md
+
+Schemas de cada colección MongoDB en el cluster argos-prod.
+
+Reglas universales:
+- Toda colección incluye `workspace_id: string` (ROG-A3) e índice por workspace_id
+- Toda colección incluye `created_at: datetime UTC` e índice por created_at
+- Cualquier campo PII de terceros se redacta o se omite según ROG-A9 y ROG-W8
+- Cualquier cambio de schema es bump de versión + migración documentada en docs/claude/
+
+## Colección: workspaces
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string unique | Identificador externo (ej: 'RODDOS') |
+| name | string | Nombre comercial |
+| verticals | array of string | ['REPUESTOS-MOTOS', 'MOTOS'] |
+| settings | object | Configuración por workspace |
+| created_at | datetime | |
+
+Índices: workspace_id (unique)
+
+## Colección: users
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | FK |
+| email | string | unique por workspace |
+| password_hash | string | Argon2 |
+| roles | array | ['ceo', 'analista', 'sistema'] |
+| created_at | datetime | |
+
+Índices: (workspace_id, email) unique
+
+## Colección: contacts (clientes finales)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | FK |
+| sismo_customer_id | string | FK al loanbook de SISMO V2 (puede ser null si no es cliente todavía) |
+| phone | string | E.164 (+57...) · unique por workspace |
+| email | string | opcional |
+| nombre_completo | string | de KYC |
+| tipo_documento | enum | CC/CE/Pasaporte |
+| numero_documento | string | encrypted at-rest |
+| fecha_nacimiento | date | |
+| genero | enum | M/F/Otro |
+| ciudad | string | |
+| direccion | string | encrypted at-rest |
+| ocupacion_tipo | enum | empleado/independiente/delivery/mototaxi |
+| ocupacion_plataforma | string | si delivery: Rappi/DiDi/etc. |
+| moto_modelo | string | modelo de moto del cliente (TVS Raider 125, etc.) |
+| moto_anio | int | |
+| es_cliente_roddos | bool | true si tiene crédito activo o histórico en SISMO |
+| score_comportamental | enum | A+/A/B/C/D/E (de loanbook SISMO si aplica) |
+| opt_in_marketing | bool | ROG-W1 |
+| opt_in_marketing_at | datetime | timestamp + canal de obtención |
+| opt_in_canal | string | 'whatsapp_first_message' / 'web_form' / 'qr_empaque' |
+| created_at | datetime | |
+
+Índices: (workspace_id, phone) unique · (workspace_id, sismo_customer_id) · (workspace_id, es_cliente_roddos)
+
+## Colección: conversations
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| contact_id | ObjectId | FK contacts |
+| started_at | datetime | |
+| ended_at | datetime | null mientras activa |
+| messages_count | int | |
+| intent_classification | enum | cotizar_moto/cotizar_repuesto/pago_cuota/soporte/otro |
+| outcome | enum | vendio/no_vendio/handoff_humano/abandono · ROG-W7 |
+| value_usd | float | venta total atribuida si outcome = vendio |
+| handoff_reason | string | si aplicó |
+| ai_messages | int | mensajes generados por WhatsApp Agent |
+| human_messages | int | mensajes del operador humano post-handoff |
+
+Índices: (workspace_id, contact_id, started_at) · (workspace_id, outcome) · (workspace_id, intent_classification)
+
+## Colección: messages
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| conversation_id | ObjectId | FK conversations |
+| direction | enum | inbound/outbound |
+| sender | enum | client/whatsapp_agent/operator_human |
+| message_type | enum | text/image/audio/document/template/flow |
+| content | string | texto o caption |
+| media_url | string | si aplica |
+| transcription | string | si message_type = audio (Whisper output) |
+| vision_analysis | object | si message_type = image (Claude vision output) |
+| template_name | string | si outbound y es template aprobado |
+| cost_usd | float | costo del mensaje según pricing Meta |
+| timestamp_utc | datetime | |
+
+Índices: (workspace_id, conversation_id, timestamp_utc)
+
+## Colección: scoring_solicitudes
+
+Schema fiel al Build 20 de RODDOS, con marca de origen `argos`.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| solicitud_id | string unique | Formato: SCR-ARGOS-2026-XXXX (diferenciado del web: SCR-WEB-2026-XXXX) |
+| origen | enum | argos (canal WhatsApp) · web (canal roddos.com) — ROG-S1 |
+| contact_id | ObjectId | FK contacts |
+| estado | enum | pendiente/en_evaluacion/aprobado/rechazado/revision_manual |
+| **Datos personales** | | (heredados del Build 20) |
+| nombre_completo, email, telefono, fecha_nacimiento, genero, tipo_documento, numero_documento, lugar_expedicion, lugar_nacimiento | varios | encrypted PII |
+| **Residencia** | | |
+| pais, departamento, ciudad, direccion, zona | varios | |
+| **Actividad económica** | | |
+| tipo_empleo, plataforma_delivery, rango_salarial, gastos_mensuales, tiempo_actividad_meses, uso_moto | varios | |
+| **Producto** | | |
+| producto | enum | credito_moto/credito_repuestos/ambos |
+| monto_solicitado | float | |
+| **Referencia** | | |
+| referencia_nombre, referencia_telefono, referencia_direccion | varios | |
+| **Resultados de partners** | | |
+| auco_validacion | object | {estado, score_biometrico, timestamp} |
+| palenca_data | object | si delivery/mototaxi |
+| riskseal_data | object | {digital_score, fraud_flag, data_points_count} — NUEVO en ARGOS |
+| documentos | array | [{tipo, claude_analysis, ingreso_verificado, gastos_verificados}] |
+| **Score y decisión** | | |
+| score_modelo | float | output XGBoost 0-1 |
+| score_claude | float | ajuste cualitativo -0.15 a +0.15 |
+| score_final | int | 0-1000 |
+| categoria_riesgo | enum | muy_bajo/bajo/medio/alto/muy_alto |
+| decision | enum | aprobado/rechazado/revision_manual |
+| monto_aprobado | float | null si rechazado |
+| narrativa_decision | string | generada por Claude (auditable · ROG-S4) |
+| reglas_aplicadas | enum | credito_moto/credito_repuestos |
+| tiempo_evaluacion_seg | int | objetivo < 300 (5 min) |
+| modelo_version_hash | string | hash del XGBoost activo · ROG-S5 |
+| **Timestamps** | | |
+| creado_en | datetime | |
+| evaluado_en | datetime | null mientras pendiente |
+| notificado_en | datetime | timestamp de envío WhatsApp |
+
+Índices: (workspace_id, solicitud_id) unique · (workspace_id, origen, creado_en) · (workspace_id, estado) · (workspace_id, contact_id)
+
+## Colección: products_catalog (repuestos detectados en marketplaces)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| sku_normalizado | string | SKU canónico interno |
+| source | enum | meli/fb_mp/competitor_site |
+| source_id | string | ID en la fuente |
+| nombre | string | |
+| categoria | string | jerárquica: 'repuestos.frenos.pastillas' |
+| compatible_motos | array | ['TVS Raider 125 2020-2024', 'Pulsar NS 200 2018-2024'] |
+| precio_actual | float | COP |
+| stock_disponible | int | |
+| seller_id | string | hash si no es público |
+| imagen_url | string | |
+| created_at | datetime | |
+| updated_at | datetime | |
+
+Índices: (workspace_id, sku_normalizado) · (workspace_id, source, source_id) · (workspace_id, categoria) · (workspace_id, updated_at)
+
+## Colección: products_history
+
+Series temporales de precios y stock.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| product_id | ObjectId | FK products_catalog |
+| timestamp | datetime | |
+| precio | float | |
+| stock | int | |
+| source | enum | |
+
+Índices: (workspace_id, product_id, timestamp)
+
+## Colección: ads_library
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| competitor_id | string | |
+| platform | enum | meta/google/tiktok |
+| ad_id_externo | string | |
+| copy_text | string | |
+| creative_url | string | url al asset descargado en Persistent Disk |
+| creative_local_path | string | path en disk |
+| primera_deteccion | datetime | |
+| ultima_deteccion | datetime | |
+| durabilidad_dias | int | calculated |
+| activo_actualmente | bool | |
+| sku_referenciado | string | si se identificó |
+| estimado_spend | float | si SerpAPI lo da |
+
+Índices: (workspace_id, platform, ad_id_externo) unique · (workspace_id, competitor_id) · (workspace_id, activo_actualmente)
+
+## Colección: social_accounts
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| platform | enum | ig/tiktok/youtube |
+| account_handle | string | @rappi_motos etc. |
+| followers | int | |
+| relevance_score | float | calculado por Social Agent |
+| vertical | string | |
+| ultima_metricas_at | datetime | |
+
+## Colección: social_posts
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| account_id | ObjectId | FK social_accounts |
+| post_external_id | string | |
+| views | int | |
+| engagement_rate | float | |
+| caption | string | |
+| related_skus_detected | array | NLP detection |
+| viral_flag | bool | |
+| posted_at | datetime | |
+
+## Colección: keywords
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| keyword | string | |
+| search_volume | int | |
+| growth_pct_7d | float | |
+| growth_pct_30d | float | |
+| vertical | string | |
+| spike_detected | bool | |
+| updated_at | datetime | |
+
+## Colección: recommendations
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| created_at | datetime | |
+| type | enum | pricing_change/promo_launch/ad_campaign/inventory_reorder/competitive_response/portfolio_add/portfolio_drop |
+| sku_affected | string or array | |
+| action_description | string | |
+| rationale | string | |
+| evidence_refs | array | IDs en products_catalog, ads_library, etc. |
+| expected_impact | object | {metric, baseline, target, confidence} |
+| actual_impact | object | poblado en T+7 desde SISMO |
+| hit_rate_contribution | float | 0.0-1.0 |
+| learning | string | reflexión post-mortem del Strategist |
+| status | enum | pendiente/aprobada/ejecutada/rechazada/rechazada_compliance/expirada/evaluada |
+| approved_by | string | user_id del aprobador |
+| approved_at | datetime | |
+| executed_at | datetime | |
+| priority_score | float | 0.0-1.0 |
+| shown_in_briefing | array of dates | |
+
+Índices: (workspace_id, status, priority_score) · (workspace_id, created_at)
+
+## Colección: campaigns
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| recommendation_id | ObjectId | FK |
+| platform | enum | meta/google |
+| external_id | string | ID en la plataforma destino |
+| budget_total | float | COP |
+| spending_actual | float | COP |
+| status | enum | active/paused/completed |
+| metrics | object | {impressions, clicks, conversions, ctr, cpc, roas} |
+| created_at | datetime | |
+
+## Colección: cobros
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| customer_id | ObjectId | FK contacts |
+| credito_id | string | FK loanbook SISMO |
+| cuota_numero | int | 1 a 39/52/78 |
+| monto | float | COP |
+| fecha_vencimiento | date | |
+| wava_link_id | string | |
+| wava_link_url | string | |
+| estado | enum | pendiente/notificado/pagado/vencido/escalado |
+| pagado_en | datetime | |
+| metodo_pago | enum | nequi/daviplata/pse/tarjeta |
+| transaction_id_wava | string | |
+| recordatorios_enviados | int | |
+| ultimo_recordatorio_at | datetime | |
+| created_at | datetime | |
+
+Índices: (workspace_id, customer_id, estado) · (workspace_id, fecha_vencimiento, estado)
+
+## Colección: argos_events (bus append-only · ROG-A6)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| event_id | string unique | ULID |
+| event_type | string | dot.notation |
+| version | string | semver |
+| workspace_id | string | |
+| timestamp_utc | datetime | |
+| producer | string | |
+| correlation_id | string | |
+| causation_id | string | nullable |
+| payload | object | |
+| metadata | object | |
+
+Índices: event_id unique · (workspace_id, event_type, timestamp_utc) · correlation_id
+
+Política: NUNCA UPDATE · NUNCA DELETE · solo INSERT
+
+## Colección: agent_memory (memoria de largo plazo por agente)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| agent_name | string | |
+| memory_key | string | jerárquico |
+| memory_value | object | |
+| importance | float | 0.0-1.0 para retrieval ranking |
+| created_at | datetime | |
+| updated_at | datetime | |
+
+## Colección: agent_sessions (TTL 72h)
+
+Estado conversacional de corta duración. TTL index sobre `expires_at`.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| agent_name | string | |
+| session_id | string | |
+| state | object | |
+| expires_at | datetime | TTL 72h desde última actualización |
+
+## Colección: audit_log
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| timestamp_utc | datetime | |
+| actor_type | enum | user/system/agent |
+| actor_id | string | |
+| action | string | |
+| resource_type | string | |
+| resource_id | string | |
+| metadata | object | |
+| result | enum | success/failure |
+| ip_address | string | si aplica |
+
+Índices: (workspace_id, timestamp_utc) · (workspace_id, actor_id) · (workspace_id, resource_type, resource_id)
+
+## Colección: deuda_tecnica
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| titulo | string | |
+| descripcion | string | |
+| modulo | string | |
+| prioridad | enum | baja/media/alta/critica |
+| owner | string | |
+| created_at | datetime | |
+| resuelto_en | datetime | nullable |
+| resuelto_por | string | nullable |
+
+## Colección: system_health
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| timestamp_utc | datetime | |
+| component | string | |
+| status | enum | healthy/degraded/down |
+| details | object | |
+| metrics | object | {response_time_ms, error_rate, etc.} |

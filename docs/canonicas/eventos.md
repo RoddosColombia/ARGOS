@@ -1,0 +1,129 @@
+# docs/canonicas/eventos.md
+
+Bus argos_events. Append-only e inmutable (ROG-A6).
+
+## Schema base de todo evento
+
+```json
+{
+  "event_id": "evt_2026_xxxxxxxxx",          // ULID, único
+  "event_type": "score.evaluated",            // dot.notation jerárquico
+  "version": "1.0",                           // semver del schema del evento
+  "workspace_id": "RODDOS",                   // multi-tenant obligatorio (ROG-A3)
+  "timestamp_utc": "2026-04-21T13:50:00Z",    // ISO 8601 UTC
+  "producer": "score_engine",                 // qué agente o módulo emitió
+  "correlation_id": "conv_abc123",            // para encadenar eventos relacionados
+  "causation_id": "evt_2026_yyy",             // qué evento previo lo causó (null si origen)
+  "payload": { /* específico al event_type */ },
+  "metadata": {
+    "model_version": "xgb_v2.1_hash_a1b2",
+    "trace_id": "trace_xyz"
+  }
+}
+```
+
+## Catálogo de eventos por dominio
+
+### Dominio: WhatsApp (canal de cliente)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| whatsapp.message.received | mercately_webhook | whatsapp_agent, executive | {phone, contact_id, message_type, content, media_url, conversation_id} |
+| whatsapp.message.sent | whatsapp_agent | executive, audit_log | {phone, message_id, template_used, cost_usd, channel} |
+| whatsapp.opt_in.granted | whatsapp_agent | compliance_officer, sismo_sync | {phone, contact_id, channel_obtention, timestamp} |
+| whatsapp.opt_out.requested | whatsapp_agent | compliance_officer, sismo_sync | {phone, contact_id, reason} |
+| whatsapp.handoff.triggered | whatsapp_agent | executive, audit_log | {phone, conversation_id, reason, escalation_level} |
+| whatsapp.conversation.closed | whatsapp_agent | strategist, learning | {conversation_id, outcome, duration_seg, messages_count, value_usd} |
+| whatsapp.intent.classified | whatsapp_agent | strategist | {phone, intent_type: cotizar_moto/cotizar_repuesto/pago_cuota/soporte/otro, confidence} |
+
+### Dominio: Score Engine (motor de score interno de ARGOS)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| score.solicitud.created | whatsapp_agent | score_engine | {solicitud_id, producto, monto, kyc_data} |
+| score.kyc.completed | score_engine | risk_validator | {solicitud_id, kyc_completo: bool, missing_fields} |
+| score.partner.queried | score_engine | audit_log | {solicitud_id, partner: auco/palenca/riskseal, resultado, latency_ms} |
+| score.hard_rules.evaluated | score_engine | strategist | {solicitud_id, rechazo_inmediato: bool, regla_violada} |
+| score.ml.calculated | score_engine | audit_log | {solicitud_id, score_modelo, model_hash, features_used} |
+| score.claude.adjusted | score_engine | audit_log | {solicitud_id, ajuste, narrativa, tokens_usados} |
+| score.evaluated | score_engine | whatsapp_agent, sismo_sync, dashboard | {solicitud_id, score_final, categoria, decision, monto_aprobado} |
+| score.notified | whatsapp_agent | audit_log | {solicitud_id, notification_method: whatsapp, delivered: bool} |
+
+### Dominio: Cobranza (RADAR + Wava)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| cobro.programado | sismo_radar_sync | cobranza_orchestrator | {customer_id, cuota_numero, monto, fecha_vencimiento, credito_id} |
+| cobro.link_generated | wava_integration | whatsapp_agent | {customer_id, wava_link, expira_en, monto, metodos: nequi/daviplata} |
+| cobro.notificacion.enviada | whatsapp_agent | audit_log | {customer_id, link_id, fecha_envio} |
+| cobro.pago.recibido | wava_webhook | sismo_radar_sync, whatsapp_agent | {customer_id, link_id, monto, metodo, transaction_id, timestamp} |
+| cobro.pago.confirmado | sismo_radar_sync | whatsapp_agent | {customer_id, cuota_numero, saldo_actualizado} |
+| cobro.recordatorio.disparado | cobranza_orchestrator | whatsapp_agent | {customer_id, days_overdue, cuota_numero, intensidad: suave/medio/firme} |
+| cobro.morosidad.detectada | cobranza_orchestrator | strategist, executive, sismo_sync | {customer_id, days_overdue, monto_acumulado, accion_sugerida} |
+
+### Dominio: Marketplace e inteligencia
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| marketplace.product.detected | scout, marketplace_agent | strategist | {sku, source: meli/fb_mp, precio, stock, seller, vertical} |
+| marketplace.price.changed | marketplace_agent | strategist, competitors | {sku, source, precio_anterior, precio_nuevo, delta_pct} |
+| marketplace.competitor.detected | competitors | strategist | {competitor_id, source, sku, precio} |
+| competitor.ad.detected | competitors | strategist | {competitor_id, platform: meta/google/tiktok, ad_id, copy, creative_url, durabilidad_dias} |
+| competitor.promo.detected | competitors | strategist, executive | {competitor_id, sku, descuento_pct, vigencia} |
+| trends.keyword.spiking | trends | strategist | {keyword, search_volume, growth_pct, vertical} |
+| social.account.viral_detected | social | strategist | {account_id, platform: ig/tiktok, post_id, views, vertical} |
+| social.reel.viral | social | strategist | {post_id, platform, views, engagement_rate, related_skus} |
+
+### Dominio: Strategist y decisiones
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| recommendation.created | strategist | executive, compliance_officer, sismo_sync | {recommendation_id, type, sku_affected, action, expected_impact, rationale} |
+| recommendation.compliance.validated | compliance_officer | executive | {recommendation_id, status: aprobado/rechazado_compliance, motivo} |
+| recommendation.approved | executive | media_buyer, audit_log | {recommendation_id, approved_by, approved_at} |
+| recommendation.executed | media_buyer | strategist, audit_log | {recommendation_id, execution_id, external_ref} |
+| recommendation.measured | sismo_sync | strategist | {recommendation_id, actual_impact, hit_rate_contribution, learning} |
+
+### Dominio: Media Buyer (pauta digital)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| campaign.requested | strategist | compliance_officer | {campaign_id, platform: meta/google, budget, audience, sku_affected} |
+| campaign.compliance.passed | compliance_officer | media_buyer | {campaign_id} |
+| campaign.created | media_buyer | sismo_sync, audit_log | {campaign_id, platform, external_id, http_status: 200} |
+| campaign.metrics.updated | media_buyer | strategist | {campaign_id, impresions, clicks, spend, conversions} |
+| campaign.cap.reached | compliance_officer | media_buyer, executive | {campaign_id, cap_type, current, limit} |
+
+### Dominio: Briefing diario y reportes
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| briefing.generation.started | scheduler | strategist, executive | {date, workspace_id} |
+| briefing.published | executive | audit_log | {briefing_id, date, top_actions_count, url_dashboard} |
+| briefing.action.approved | executive (web UI) | strategist | {briefing_id, action_id, approved_by} |
+| briefing.action.rejected | executive (web UI) | strategist | {briefing_id, action_id, rejected_by, reason} |
+
+### Dominio: Cross-system (ARGOS ⇄ SISMO V2)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| sismo.inventory.synced | sismo_sync | marketplace_agent, strategist | {sync_id, items_count, timestamp} |
+| sismo.sales.daily.synced | sismo_sync | strategist, dashboard | {date, sales_count, total_amount} |
+| sismo.customer.created | sismo_sync | whatsapp_agent | {customer_id, source: argos/web} |
+| sismo.loanbook.snapshot | sismo_sync | score_engine | {snapshot_id, records_count, timestamp} |
+| argos.recommendation.published | strategist | sismo_radar_sync | {recommendation_id, type, sku, action} |
+
+## Versionado de eventos
+
+- Cada evento tiene campo `version` semver
+- Cambios non-breaking (agregar campo opcional al payload): bump minor
+- Cambios breaking (renombrar campo, cambiar tipo, eliminar campo): bump major + migración documentada en docs/claude/phase_X.md
+- Consumidores deben ser tolerantes a campos desconocidos (forward compatibility)
+
+## Reglas de uso
+
+1. Antes de emitir cualquier evento nuevo: registrarlo aquí primero
+2. Antes de consumir un evento: verificar que esté listado y entender su payload
+3. Los eventos se persisten en colección `argos_events` con TTL infinito (jamás se borran · ROG-A6)
+4. Para queries analíticas se replica a una colección secundaria `argos_events_indexed` con índices por event_type, workspace_id, timestamp
+5. Cada agente debe poder reconstruir su estado leyendo el bus desde un punto en el tiempo (event sourcing)

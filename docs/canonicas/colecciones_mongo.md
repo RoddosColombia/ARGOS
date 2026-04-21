@@ -27,12 +27,16 @@ Reglas universales:
 |-------|------|-------|
 | _id | ObjectId | |
 | workspace_id | string | FK |
-| email | string | unique por workspace |
-| password_hash | string | Argon2 |
-| roles | array | ['ceo', 'analista', 'sistema'] |
+| email | string | unique por workspace · se persiste en lowercase |
+| password_hash | string | bcrypt (cost 12) · ver nota |
+| roles | array of string | ['ceo', 'analista', 'sistema', 'cliente'] · ver nota |
 | created_at | datetime | |
 
 Índices: (workspace_id, email) unique
+
+**Nota sobre `password_hash`:** se usa **bcrypt** directo (librería `bcrypt` >=4.1) en vez de Argon2. Razón: `passlib` 1.7.4 tiene incompatibilidad conocida con `bcrypt` 4.x (requiere pinear `bcrypt==4.0.1`) y mantener passlib agrega una dependencia frágil sin ganancia criptográfica relevante para el threat model de ARGOS (hashes nunca expuestos · Atlas con acceso restringido por IP allow-list). Si en el futuro hay requisito FIPS/compliance que fuerce Argon2, migrar con bump de schema versión y rehash progresivo en login.
+
+**Nota sobre `roles`:** se persiste como array para permitir RBAC futuro, pero el JWT actual lleva un único campo `role` (string). `MongoUserStore` toma `roles[0]` como rol activo en el token. Cuando se requiera que un mismo usuario opere con múltiples roles simultáneos (ej: CEO que también es analista), escalar al CEO y diseñar: (a) cambio de contrato JWT a `roles: [str]` o (b) role-selector en login. Hasta entonces, cada usuario tiene un único rol efectivo.
 
 ## Colección: contacts (clientes finales)
 

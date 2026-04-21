@@ -23,6 +23,22 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 0.3 · MongoDB Atlas + colecciones + MongoUserStore + seed (2026-04-21)
+
+- **Atlas M2 `argos-prod` conectado** desde dev vía `mongodb+srv://` · Mongo 8.0.21. DB `argos` (prod) vs `argos_test` (tests de integración · se limpia antes/después).
+- **Rename `MONGODB_URL` → `MONGODB_URI`** por coherencia con la convención que el CEO usa al entregar connection strings. Impact: settings + config + conftest + tests actualizados. Mantener URI en todo lo siguiente.
+- **Fail-fast en startup si Atlas no responde.** `connect_mongo(verify=True)` hace `ping` antes de dejar el cliente montado · si falla, cierra y re-lanza. Alternativa descartada: degradación silenciosa a `EnvUserStore`. Razón: ROG-A5 obliga a reportar estado verdadero · mejor no arrancar que arrancar en estado inconsistente.
+- **Módulos de DB separados por responsabilidad:** `collections.py` (constantes de nombre) · `indexes.py` (`ensure_indexes`) · `seed.py` (`seed_initial_data`) · `events.py` (`publish_event`). Todos async · todos idempotentes · ninguno asume que la DB esté poblada.
+- **Seed: `$setOnInsert` para `password_hash`, no `$set`.** Decisión explícita: si alguien rota `ADMIN_PASSWORD_HASH` en `.env` y restartea, el seed NO sobreescribe el hash en Mongo. Evita rotaciones silenciosas. Test `test_seed_does_not_rotate_password` lo verifica. Para rotar password intencional: `db.users.updateOne(...)` manual o CLI futuro.
+- **Event publisher con ULID** (`python-ulid`) en vez de UUID. Razón: canónica `eventos.md` especifica `event_id: "evt_2026_xxxxxxxxx"` con formato ULID (lexicográficamente ordenable por timestamp, útil para queries `(workspace, timestamp)`). Prefijo `evt_` conservado.
+- **`publish_event` valida schema mínimo** antes de insertar: `event_type` dot.notation, `workspace_id` no-vacío (ROG-A3), `producer` no-vacío, `payload` dict. `EventValidationError` se lanza antes de tocar DB. Schema completo del documento se construye internamente.
+- **MongoUserStore query por email (no por `(workspace_id, email)`)** en Build 0.3. Razón: único workspace por ahora (RODDOS) · login no recibe workspace_id en request body. Cuando haya multi-tenant users, la firma de login cambia y este store se adapta. Índice `(workspace_id, email) unique` ya está creado para prevenir duplicados entre tenants.
+- **`roles: [str]` en Mongo vs `role: str` en JWT.** MongoUserStore toma `roles[0]` como rol activo. Documentado en la canónica `colecciones_mongo.md` con la nota sobre escalamiento al CEO cuando se necesite RBAC multi-rol.
+- **Canónica actualizada: Argon2 → bcrypt.** Conflicto descubierto entre `colecciones_mongo.md:31` (Argon2) y código de Build 0.2 (bcrypt). Escalé al CEO, decisión: opción B (alinear canónica a código). Ver nota ampliada en canónica con justificación del threat model.
+- **TestClient con `with ...`** (context manager) en vez de `TestClient(app)` directo · así `lifespan` ejecuta startup+shutdown. Sin esto, Mongo no se conectaría durante tests y `MongoUserStore` nunca quedaría activo. Regresión en `conftest.py`.
+- **Tests de integración usan DB `argos_test` (distinta de `argos`).** Limpian antes y después · son ~9 segundos end-to-end contra Atlas real (M2). CI corrido localmente pasa 27/27. En Build 0.5 (GitHub Actions) se evaluará si los integration tests corren en CI con secrets, o si se marcan opt-in para PRs que tocan DB.
+- **`python-dotenv` añadido para que el test loader pueda leer `.env` e ignorar el `MONGODB_URI=""` que conftest fuerza.** Sin esto, los integration tests se saltan siempre porque conftest blanquea la URI antes de que pytest lea nada. La función `_real_mongo_uri()` lee `.env` directamente.
+
 ### Build 0.2 · FastAPI + JWT + /api/v1/health (2026-04-21)
 
 - **Layout del backend:** `pyproject.toml` en raíz del repo (no en `src/backend/`) para facilitar CI y monorepo · paquete Python en `src/backend/argos/` con `src-layout` · tests en `tests/backend/`. Trade-off: un comando `pytest` desde raíz corre todo sin `cd`.
@@ -46,7 +62,14 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 - **Branch protection diferida a GitHub UI post-push.** Razón: CEO la configura manualmente · evita instalar `gh` CLI en el entorno local.
 
 ## Cambios en canónicas
-- Ninguno en Build 0.1. El scaffold no toca integraciones. Las canónicas `apis_externas.md`, `eventos.md`, `colecciones_mongo.md`, `integraciones_sismo.md` se entregaron pre-pobladas desde el paquete Visión 2.0 y se commitean tal cual.
+
+### Build 0.3
+- **`docs/canonicas/colecciones_mongo.md` · colección `users`:**
+  - `password_hash`: **Argon2 → bcrypt (cost 12)** · añadida nota con justificación del threat model
+  - `roles`: tipo `array` → `array of string` · añadida nota aclaratoria sobre `roles[0]` → JWT `role` y el escalamiento al CEO para RBAC múltiple
+
+### Build 0.1
+- Ninguno. El scaffold no toca integraciones. Las canónicas `apis_externas.md`, `eventos.md`, `colecciones_mongo.md`, `integraciones_sismo.md` se entregaron pre-pobladas desde el paquete Visión 2.0 y se commitean tal cual.
 
 ## Errores cometidos y cómo se resolvieron
 
@@ -66,10 +89,14 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 ## Métricas de la fase
 - Deploy verde: ⬜ (Build 0.5)
 - Autodeploy en push a main < 5 min: ⬜ (Build 0.5)
-- `/api/v1/health` responde 200: ✅ (Build 0.2 · verificado vía TestClient + 14/14 pytest)
-- Login con workspace RODDOS funcional: ✅ (Build 0.2 · `EnvUserStore` · swap a Mongo en 0.3)
+- `/api/v1/health` responde 200: ✅ (Build 0.2 · verificado vía TestClient)
+- `/api/v1/health/deep` con ping real a Atlas: ✅ (Build 0.3 · 200 OK con Mongo 8.0.21)
+- Login con workspace RODDOS funcional: ✅ (Build 0.3 · `MongoUserStore` activo · seed creó user CEO)
+- Colecciones + índices: ✅ (Build 0.3 · 5 colecciones, 15 índices, idempotente)
 - System User + Service Account ARGOS creados con credenciales separadas: ⬜ (Build 0.8)
 - Baseline operativo capturado: ⬜ (Build 0.9)
+- **Tests totales:** 27/27 passing (14 unit + 13 integración vs Atlas real)
+- **Lint:** ruff check limpio
 
 ## Aprendizajes
 
@@ -80,13 +107,18 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Cierre parcial · Phase 0 sigue abierta
 
-### Build 0.2 · 2026-04-21
+### Build 0.3 · 2026-04-21
 - Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
-- Rama: `phase-0/build-0.2-fastapi-auth` → PR a `main`
-- Tests: 14/14 pasaron (`pytest tests/backend`)
+- Rama: `phase-0/build-0.3-mongodb` → PR a `main`
+- Tests: 27/27 pasaron (14 existentes + 13 nuevos de integración contra Atlas real)
 - Lint: `ruff check` limpio
+- Entregado: Motor conectado a Atlas M2 · 5 colecciones (workspaces, users, argos_events, audit_log, system_health) · 15 índices · seed idempotente RODDOS+CEO · `MongoUserStore` reemplaza a `EnvUserStore` · `publish_event` con ULIDs
+- Canónica actualizada: `colecciones_mongo.md` (users: Argon2→bcrypt, roles notes)
+- Próximo build: **0.4** — React 19 + Vite + TypeScript frontend interno base
+
+### Build 0.2 · 2026-04-21 (mergeado con squash)
+- PR #1 aprobado · commit en main: `dfaf852 feat: FastAPI + JWT auth + health endpoints (phase_0/build_0.2) (#1)`
 - Endpoints entregados: `GET /api/v1/health`, `GET /api/v1/health/deep`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- Próximo build: **0.3** — MongoDB connection + workspaces + users + argos_events + índices + seed
 
 ### Build 0.1 · 2026-04-21
 - Cerrado por: Andrés San Juan (CEO) + Claude Code

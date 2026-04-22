@@ -23,6 +23,26 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 0.5 · Deploy a Render + dominio argos.roddos.com (2026-04-22)
+
+- **IaC con Render Blueprint (`render.yaml` en raíz).** Define ambos servicios: `argos-backend` (Docker, plan Starter) y `argos-frontend` (Static Site, gratis). Un solo archivo, versionado, reproducible. Cuando el CEO conecte el repo via UI, Render aprovisiona todo sin clicks manuales de configuración.
+- **Topología de dominios: split frontend/api.**
+  - `argos.roddos.com` → static site (React)
+  - `api.argos.roddos.com` → backend (FastAPI)
+  - CORS permite solo `argos.roddos.com` en prod
+  - Alternativa descartada: monolito en un solo dominio con FastAPI sirviendo el bundle. Razón: el split estándar es más simple a nivel Render, permite escalar cada servicio independiente, y evita que el backend maneje estáticos (no es su rol).
+- **Dockerfile multi-stage (builder + runtime) con `python:3.11-slim`.** El builder instala el paquete editable en `/opt/venv` y compila wheels con `build-essential` (bcrypt, cffi requieren). El runtime copia solo `/opt/venv` y `src/backend/`, corre como usuario `argos` non-root. Imagen final ~150 MB. `.dockerignore` excluye tests/docs/secrets/node_modules del build context.
+- **Uvicorn con `--proxy-headers --forwarded-allow-ips '*'`.** Necesario detrás de proxy Render para que el backend lea el `X-Forwarded-*` correcto (IP cliente real para logs + https scheme). Sin esto, logs reportan la IP del proxy interno y `request.url.scheme` dice "http".
+- **`$PORT` env var de Render.** Render inyecta un puerto aleatorio por deploy. `CMD ["sh", "-c", "...${PORT:-8000}"]` lee la env var en runtime, con fallback 8000 para `docker run` local. `EXPOSE 8000` es documentativo, Render ignora.
+- **Integration tests auto-skip en CI.** `test_integration_mongo.py` usa `pytest.skipif(not REAL_URI, ...)`. En CI sin `.env` y sin `ARGOS_INTEGRATION_MONGODB_URI`, todos los tests de integración se saltan. Unit tests (14) siempre corren. Alternativa descartada: inyectar MONGODB_URI como GitHub Secret y dejar que CI toque Atlas prod. Razón: blast radius — un test mal escrito podría dropear colecciones reales. Integration se corre localmente por el dev que toca la DB.
+- **CI en 3 jobs paralelos: `backend`, `frontend`, `docker-build`.** Timeouts 10 min cada uno. `docker-build` es smoke test (build sin push) para detectar breakage del Dockerfile en PRs que tocan backend. Cache GHA activado para pip + npm + Docker layers.
+- **Deploy workflow fallback vía deploy hooks.** Complementa (no reemplaza) la app GitHub de Render. Si se prefiere control desde CI en vez de auto-deploy, se setean `RENDER_DEPLOY_HOOK_BACKEND` y `RENDER_DEPLOY_HOOK_FRONTEND` como secrets. Sin secrets, el job es no-op con `::notice::`. Evita depender exclusivamente de la app de Render si alguna vez la desconectan.
+- **`VITE_API_URL` → `VITE_ARGOS_API_URL` (rename).** Consistencia con el prefijo `ARGOS_*` usado en backend. Afectó: `api.ts`, `vite.config.ts`, `vite-env.d.ts`, `.env.example`. Tests siguen verdes (12/12), build limpio.
+- **Headers de seguridad en Render static.** `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` para `/*` · `Cache-Control: public, max-age=31536000, immutable` para `/assets/*` (hash en el nombre → seguro cachearlo forever).
+- **SPA fallback con rewrite `/*` → `/index.html`** en render.yaml para que react-router-dom maneje rutas client-side sin 404s del static server.
+- **CEO maneja el DNS (GoDaddy) + custom domains (Render UI)** manualmente. Documentado paso a paso en README.md. Razón: las credenciales de GoDaddy y Render UI no están expuestas al agente · es trabajo del CEO único.
+- **Builds del ciclo: no deploys desde Claude Code.** Respetado por instrucción explícita del CEO. Esta phase solo entrega los archivos de IaC; el acto de conectar+desplegar lo hace el humano en UI.
+
 ### Build 0.4 · React 19 + Vite + dashboard shell autenticado (2026-04-22)
 
 - **Stack frontend elegido:** React 19.1 + Vite 6 + TypeScript 5.7 strict + Tailwind 4.1 (via `@tailwindcss/vite`, sin archivo `tailwind.config.js`) + react-router-dom 7 + TanStack Query 5 + react-hook-form 7 + zod 3 + Vitest 3. Notable: stack.md listaba Vite 5.x; elegí Vite 6 (estable, mantiene API del 5) para no arrastrar un bump forzado en Build 0.5. Tailwind 4 sin config es el default moderno — tokens de diseño viven en `@theme` dentro de `src/index.css`.
@@ -113,6 +133,9 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 - **Tests totales:** 27 backend + 12 frontend = 39/39 passing
 - **Lint:** ruff check limpio (backend) · tsc -b sin errores (frontend)
 - **Frontend build:** 165 modules, 419 KB JS (129 KB gzip), sin warnings
+- **CI workflow YAML válido** (`ci.yml`, `deploy.yml`, `render.yaml` pasan `yaml.safe_load`)
+- **Docker build:** smoke test en CI · imagen ~150 MB runtime (python:3.11-slim multi-stage)
+- **Pendiente manual (CEO):** conectar blueprint en Render UI + env vars sync:false + GoDaddy CNAME + custom domains · pasos documentados en README.md
 
 ## Aprendizajes
 
@@ -123,13 +146,18 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Cierre parcial · Phase 0 sigue abierta
 
-### Build 0.4 · 2026-04-22
+### Build 0.5 · 2026-04-22
 - Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
-- Rama: `phase-0/build-0.4-frontend` → PR a `main`
-- Tests: 12/12 frontend (3 archivos · Vitest 3 + Testing Library)
-- Build: `tsc -b && vite build` · 165 modules, 419 KB JS, sin warnings
-- Entregado: scaffold React 19 + login funcional + dashboard shell autenticado con sidebar placeholder de 6 módulos · `api.ts` con headers automáticos (ROG-A3) · sesión en localStorage · proxy Vite al backend local
-- Próximo build: **0.5** — GitHub Actions CI/CD + autodeploy Render
+- Rama: `phase-0/build-0.5-deploy` → PR a `main`
+- Entregado: `render.yaml` (blueprint backend+frontend) · `Dockerfile` multi-stage python:3.11-slim · `.dockerignore` · `.github/workflows/ci.yml` (3 jobs: backend, frontend, docker-build) · `.github/workflows/deploy.yml` (fallback hooks)
+- Rename `VITE_API_URL` → `VITE_ARGOS_API_URL` en frontend
+- README raíz: sección "Deploy a Render" con env vars por servicio + pasos manuales CEO (Render UI + GoDaddy DNS + custom domains)
+- NO deploys ejecutados · solo IaC + docs · CEO conecta Render manualmente post-merge
+- Próximo build: **0.6** — dominio argos.roddos.com + SSL (parcialmente cubierto · cerrar cuando DNS propague)
+
+### Build 0.4 · 2026-04-22 (mergeado con squash)
+- PR #3 aprobado · commit en main: `1355164 feat(frontend): React 19 + Vite + dashboard shell autenticado (phase_0/build_0.4) (#3)`
+- Entregado: scaffold React 19 + login funcional + dashboard shell + sidebar placeholder
 
 ### Build 0.3 · 2026-04-21 (mergeado con squash)
 - PR #2 aprobado · commit en main: `79474e7 feat(db): MongoDB Atlas + colecciones + MongoUserStore + seed RODDOS (phase_0/build_0.3) (#2)`

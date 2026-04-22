@@ -23,6 +23,21 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 0.4 · React 19 + Vite + dashboard shell autenticado (2026-04-22)
+
+- **Stack frontend elegido:** React 19.1 + Vite 6 + TypeScript 5.7 strict + Tailwind 4.1 (via `@tailwindcss/vite`, sin archivo `tailwind.config.js`) + react-router-dom 7 + TanStack Query 5 + react-hook-form 7 + zod 3 + Vitest 3. Notable: stack.md listaba Vite 5.x; elegí Vite 6 (estable, mantiene API del 5) para no arrastrar un bump forzado en Build 0.5. Tailwind 4 sin config es el default moderno — tokens de diseño viven en `@theme` dentro de `src/index.css`.
+- **Sin shadcn/ui.** Lo dejé fuera para no introducir un generador de componentes en el scaffold inicial. Los componentes del Layout+Sidebar+LoginPage son HTML+Tailwind plano (~80 LOC combinados). Cuando haya formularios complejos (KYC en Build 3) evaluar shadcn o Ark UI. Deuda documental pequeña: alinear con `stack.md` que menciona shadcn.
+- **Routing con `createBrowserRouter` (react-router v7 library mode).** 3 rutas: `/login` público, `/` protegido con Layout+Dashboard, `*` 404 también protegido. `ProtectedRoute` verifica `isSessionValid()` antes de renderizar · mismatch → `<Navigate to="/login" replace>`.
+- **Sesión en localStorage.** Campos: `access_token`, `workspace_id`, `role`, `expires_at` (unix ms). Trade-off XSS documentado en `README.md` y en `lib/auth.ts`. Migración a httpOnly cookies cuando el backend emita refresh tokens (build futuro).
+- **`api.ts` inyecta headers automáticamente.** Toda llamada a endpoints ARGOS incluye `Authorization: Bearer <jwt>` y `X-Workspace-Id: <ws>` (ROG-A3 desde el cliente). Opt-outs `skipAuth` / `skipWorkspace` explícitos para `/auth/login`. En 401 espontáneo: limpia la sesión silenciosamente · ProtectedRoute maneja la redirección en el siguiente render.
+- **`useCurrentUser` con TanStack Query** habilitada sólo si la sesión es válida (`enabled: isSessionValid(readSession())`). Evita la llamada fantasma a `/auth/me` durante mount del Dashboard antes de que se redirija.
+- **Sidebar con 6 módulos placeholder** etiquetados por phase (Briefing P1, Scoring P2, WhatsApp P3, Cobranza P4, Mantenimiento P5, Media Buyer P8). Dan dimensión visual del roadmap sin falsa promesa de funcionalidad — todos están `cursor-not-allowed` con tooltip "Disponible en Phase X".
+- **Dashboard muestra estado vivo de Phase 0** (checkboxes ✅/⬜ por build) + grid de 6 próximos módulos con descripción corta. Reemplazable con widgets reales cuando lleguen.
+- **Proxy Vite `/api` → `http://localhost:8000`** por default. Permite `npm run dev` sin CORS. En prod (Build 0.6 con argos.roddos.com) ambos servicios comparten origen y el proxy no aplica.
+- **Tailwind tokens custom: `brand` (emerald), `ink` (slate).** Paletas reducidas (3-5 shades cada una) — suficientes para Phase 0 · se extenderán con design system consolidado cuando haya UI designer en loop.
+- **TypeScript strict + `noUnusedLocals` + `noUnusedParameters`.** `npm run lint` = `tsc -b --noEmit`. Build (`tsc -b && vite build`) falla si hay cualquier error de tipos.
+- **Tests con MemoryRouter y QueryClient aislado** para no depender del browser ni del servidor real. Mocks de `global.fetch` para verificar el contrato del cliente API sin necesidad de levantar el backend.
+
 ### Build 0.3 · MongoDB Atlas + colecciones + MongoUserStore + seed (2026-04-21)
 
 - **Atlas M2 `argos-prod` conectado** desde dev vía `mongodb+srv://` · Mongo 8.0.21. DB `argos` (prod) vs `argos_test` (tests de integración · se limpia antes/después).
@@ -95,8 +110,9 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 - Colecciones + índices: ✅ (Build 0.3 · 5 colecciones, 15 índices, idempotente)
 - System User + Service Account ARGOS creados con credenciales separadas: ⬜ (Build 0.8)
 - Baseline operativo capturado: ⬜ (Build 0.9)
-- **Tests totales:** 27/27 passing (14 unit + 13 integración vs Atlas real)
-- **Lint:** ruff check limpio
+- **Tests totales:** 27 backend + 12 frontend = 39/39 passing
+- **Lint:** ruff check limpio (backend) · tsc -b sin errores (frontend)
+- **Frontend build:** 165 modules, 419 KB JS (129 KB gzip), sin warnings
 
 ## Aprendizajes
 
@@ -107,14 +123,17 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Cierre parcial · Phase 0 sigue abierta
 
-### Build 0.3 · 2026-04-21
+### Build 0.4 · 2026-04-22
 - Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
-- Rama: `phase-0/build-0.3-mongodb` → PR a `main`
-- Tests: 27/27 pasaron (14 existentes + 13 nuevos de integración contra Atlas real)
-- Lint: `ruff check` limpio
-- Entregado: Motor conectado a Atlas M2 · 5 colecciones (workspaces, users, argos_events, audit_log, system_health) · 15 índices · seed idempotente RODDOS+CEO · `MongoUserStore` reemplaza a `EnvUserStore` · `publish_event` con ULIDs
-- Canónica actualizada: `colecciones_mongo.md` (users: Argon2→bcrypt, roles notes)
-- Próximo build: **0.4** — React 19 + Vite + TypeScript frontend interno base
+- Rama: `phase-0/build-0.4-frontend` → PR a `main`
+- Tests: 12/12 frontend (3 archivos · Vitest 3 + Testing Library)
+- Build: `tsc -b && vite build` · 165 modules, 419 KB JS, sin warnings
+- Entregado: scaffold React 19 + login funcional + dashboard shell autenticado con sidebar placeholder de 6 módulos · `api.ts` con headers automáticos (ROG-A3) · sesión en localStorage · proxy Vite al backend local
+- Próximo build: **0.5** — GitHub Actions CI/CD + autodeploy Render
+
+### Build 0.3 · 2026-04-21 (mergeado con squash)
+- PR #2 aprobado · commit en main: `79474e7 feat(db): MongoDB Atlas + colecciones + MongoUserStore + seed RODDOS (phase_0/build_0.3) (#2)`
+- Entregado: Motor conectado a Atlas M2 · 5 colecciones · 15 índices · seed idempotente RODDOS+CEO · `MongoUserStore` · `publish_event` con ULIDs · canónica `colecciones_mongo.md` actualizada (Argon2→bcrypt)
 
 ### Build 0.2 · 2026-04-21 (mergeado con squash)
 - PR #1 aprobado · commit en main: `dfaf852 feat: FastAPI + JWT auth + health endpoints (phase_0/build_0.2) (#1)`

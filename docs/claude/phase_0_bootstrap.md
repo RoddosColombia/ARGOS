@@ -23,6 +23,19 @@ Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC exi
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 0.5 v2 · Deploy a Render con buildpack nativo (2026-04-22)
+
+- **Cambio de estrategia explícito del CEO: v1 → v2.** v1 entregó IaC completa (`Dockerfile` multi-stage + `render.yaml` blueprint + `deploy.yml` workflow fallback) pero el job `docker build smoke test` falló por `.dockerignore` excluyendo `README.md` (ER-001). El CEO decidió simplificar a **paridad con SISMO V2**: buildpack nativo Python de Render, config manual en UI, sin Docker. PR #4 queda cerrado sin mergear. Rama `phase-0/build-0.5-deploy` se mantiene en el remoto "por si acaso" referenciar el trabajo de IaC en un build futuro.
+- **Artefactos v2 mínimos:** `Procfile` (start command `uvicorn` con `$PORT`), `runtime.txt` (`python-3.11.11`), y `.github/workflows/ci.yml` simplificado a 2 jobs. Eliminados de v1: Dockerfile, .dockerignore, render.yaml, deploy.yml.
+- **CI con exactamente 2 jobs:** `backend-tests` (ruff + pytest) y `frontend-tests` (tsc + vitest + vite build). Sin docker build smoke test (no hay docker) · sin deploy workflow (Render GitHub app auto-dispatcha). Resultado: CI debe pasar 100% porque no hay piezas que puedan romperse por config de `.dockerignore` u otros quirks de containerización.
+- **`runtime.txt` con `python-3.11.11`.** Render detecta pyproject.toml + runtime.txt y usa buildpack Python. Pineo al patch nivel evita drift silencioso cuando Render actualiza el default runtime.
+- **`Procfile` al root con start command explícito.** Heroku-style, soportado por Render. Duplicado en la UI del servicio como "Start Command" (paridad con SISMO V2 que también lo duplica). Si Render UI tiene override, el UI gana; el Procfile es el fallback documental.
+- **`VITE_API_URL` → `VITE_ARGOS_API_URL`.** Único cambio de frontend que sobrevive v1 · consistencia con prefijo `ARGOS_*` del backend · afecta 4 archivos · tests siguen verdes.
+- **README.md con tabla de pasos manuales del CEO.** 5 pasos: Web Service backend, Static Site frontend, GoDaddy CNAMEs, Render custom domains, validación E2E. Replicable desde cero si alguna vez se pierde la config de Render.
+- **CLAUDE.md §5.4 "CI como gate de merge (no negociable)"** formaliza la regla operativa que el CEO estableció tras el fallo de v1: ningún PR se mergea con checks rojos sin justificación escrita.
+- **`docs/claude/deuda_tecnica.md` creado** con 3 entradas: DT-001 (sin Dockerfile), DT-002 (sin deploy workflow), DT-003 (runtime pin). Cada una con owner, prioridad, phase objetivo para resolver, y señales para re-evaluar. Pattern replicable para decisiones de over-engineering prevention a lo largo del proyecto.
+- **`docs/claude/errores_recurrentes.md` ER-001** registra el fallo de v1 con síntoma, causa raíz, solución (de haberse mantenido el Dockerfile) y prevención futura. Aunque v2 elimina el Dockerfile, el aprendizaje sobre `.dockerignore` patterns sigue siendo útil para cuando se reintroduzca containerización.
+
 ### Build 0.4 · React 19 + Vite + dashboard shell autenticado (2026-04-22)
 
 - **Stack frontend elegido:** React 19.1 + Vite 6 + TypeScript 5.7 strict + Tailwind 4.1 (via `@tailwindcss/vite`, sin archivo `tailwind.config.js`) + react-router-dom 7 + TanStack Query 5 + react-hook-form 7 + zod 3 + Vitest 3. Notable: stack.md listaba Vite 5.x; elegí Vite 6 (estable, mantiene API del 5) para no arrastrar un bump forzado en Build 0.5. Tailwind 4 sin config es el default moderno — tokens de diseño viven en `@theme` dentro de `src/index.css`.

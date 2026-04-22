@@ -1,0 +1,42 @@
+# Versionamiento
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / frontend (el Dockerfile es solo backend)
+node_modules/
+src/frontend/node_modules/
+src/frontend/dist/
+src/frontend/.vite/
+
+# Tests · no entran a la imagen runtime
+tests/
+
+# Docs y secrets locales
+docs/
+.planning/
+.env
+.env.*
+!.env.example
+*.md
+Dockerfile
+.dockerignore
+render.yaml
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

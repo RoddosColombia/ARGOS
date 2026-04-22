@@ -1,0 +1,47 @@
+name: Deploy (Render)
+
+# Complementario a la integración nativa de Render (GitHub app).
+# Si la app de Render está conectada, los deploys auto-ocurren y este workflow
+# es redundante · si se prefiere control via secret hook, setear:
+#   - secrets.RENDER_DEPLOY_HOOK_BACKEND
+#   - secrets.RENDER_DEPLOY_HOOK_FRONTEND
+# Sin secrets configurados, los steps quedan no-op.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  trigger-render:
+    name: Trigger Render deploys
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger backend deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            echo "Triggering backend deploy hook..."
+            curl -fsS -X POST "$HOOK"
+            echo "OK"
+          else
+            echo "::notice::RENDER_DEPLOY_HOOK_BACKEND not set · skipping (Render GitHub app handles deploy)"
+          fi
+
+      - name: Trigger frontend deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            echo "Triggering frontend deploy hook..."
+            curl -fsS -X POST "$HOOK"
+            echo "OK"
+          else
+            echo "::notice::RENDER_DEPLOY_HOOK_FRONTEND not set · skipping (Render GitHub app handles deploy)"
+          fi

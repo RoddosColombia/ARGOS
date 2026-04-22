@@ -1,0 +1,87 @@
+# Render Blueprint · ARGOS
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Uso:
+#   1. CEO conecta este repo en Render UI (New → Blueprint)
+#   2. Render detecta este archivo y aprovisiona backend + frontend
+#   3. CEO setea las env vars marcadas `sync: false` en el dashboard de cada
+#      servicio (ver README.md · sección "Deploy a Render")
+#   4. Render auto-despliega en cada push a `main`
+#
+# Autoridad sobre deploys: la app de Render conectada al repo (preferida) · el
+# workflow .github/workflows/deploy.yml queda como fallback via deploy hooks.
+
+services:
+  # ─── Backend · FastAPI + Motor ────────────────────────────────────────
+  - type: web
+    name: argos-backend
+    runtime: docker
+    plan: starter            # $7/mes · suficiente hasta Phase 2
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: ARGOS_ENV
+        value: prod
+      - key: ARGOS_LOG_LEVEL
+        value: INFO
+      - key: ARGOS_VERSION
+        value: "0.1.0"
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ACCESS_TOKEN_TTL_MINUTES
+        value: "60"
+      - key: MONGODB_DATABASE
+        value: argos
+      - key: MONGODB_TEST_DATABASE
+        value: argos_test
+      - key: ADMIN_ROLE
+        value: ceo
+      - key: ADMIN_WORKSPACE_ID
+        value: RODDOS
+      - key: ARGOS_CORS_ORIGINS
+        value: https://argos.roddos.com
+      # ─── Secrets · CEO los setea en Render dashboard ───────────────────
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+
+  # ─── Frontend · React static build ────────────────────────────────────
+  - type: web
+    name: argos-frontend
+    runtime: static
+    branch: main
+    rootDir: src/frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeploy: true
+    pullRequestPreviewsEnabled: false
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      # SPA fallback · toda ruta no-asset resuelve al bundle
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_ARGOS_API_URL
+        value: https://api.argos.roddos.com

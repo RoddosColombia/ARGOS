@@ -63,29 +63,114 @@ git clone https://github.com/RoddosColombia/ARGOS.git
 cd ARGOS
 ```
 
-### Backend (disponible desde Build 0.2)
+### Backend (Build 0.2+)
+
+`pyproject.toml` vive en la raíz del repo · el paquete en `src/backend/argos/`.
 
 ```bash
-cd src/backend
+# desde la raíz del repo
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-cp .env.example .env        # editar con credenciales locales
-pytest
-uvicorn argos.main:app --reload --port 8000
+cp .env.example .env               # editar con credenciales locales
+pytest tests/backend               # 27 tests (14 unit + 13 integración vs Atlas si hay URI)
+uvicorn argos.main:app --reload --app-dir src/backend --port 8000
 ```
 
-### Frontend (disponible desde Build 0.4)
+### Frontend (Build 0.4+)
 
 ```bash
 cd src/frontend
 npm install
-npm run dev
+cp .env.example .env.local         # opcional · default apunta a localhost:8000
+npm run dev                        # http://localhost:5173 con proxy /api → backend
 ```
 
 ### Variables de entorno
 
-Los secrets reales viven en Render (variables de entorno del service). Localmente se usa `.env` (ignorado por git · ver [`.gitignore`](.gitignore)). El catálogo de credenciales requeridas está en [`docs/knowledge/partners.md`](docs/knowledge/partners.md).
+Los secrets reales viven en Render (Build 0.5+). Localmente se usa `.env` (ignorado por git · ver [`.gitignore`](.gitignore)). Catálogo de credenciales en [`docs/knowledge/partners.md`](docs/knowledge/partners.md).
+
+| Variable | Dev local | Prod (Render) | Descripción |
+|---|---|---|---|
+| `ARGOS_ENV` | `dev` | `prod` | Ambiente |
+| `JWT_SECRET` | generar · 64 chars | Render env (sync: false) | HS256 para JWT |
+| `JWT_ACCESS_TOKEN_TTL_MINUTES` | `60` | `60` | TTL del access token |
+| `MONGODB_URI` | Atlas dev URI | Render env (sync: false) | Cluster argos-prod |
+| `MONGODB_DATABASE` | `argos` | `argos` | DB name |
+| `ADMIN_EMAIL` | `ceo@roddos.com` | Render env (sync: false) | Email del CEO admin |
+| `ADMIN_PASSWORD_HASH` | bcrypt hash local | Render env (sync: false) | Hash del password (seed lo persiste en users) |
+| `ADMIN_ROLE` | `ceo` | `ceo` | Rol del admin bootstrap |
+| `ADMIN_WORKSPACE_ID` | `RODDOS` | `RODDOS` | Workspace primario |
+| `ARGOS_CORS_ORIGINS` | `http://localhost:5173` | `https://argos.roddos.com` | Origins permitidos |
+| `VITE_ARGOS_API_URL` (frontend) | `http://localhost:8000` | `https://api.argos.roddos.com` | URL del backend |
+
+---
+
+## Deploy a Render (Build 0.5+)
+
+ARGOS se despliega vía **Render Blueprint** (`render.yaml` en la raíz). Define dos servicios: `argos-backend` (Docker, plan Starter $7/mes) y `argos-frontend` (Static Site, gratis). CI corre en GitHub Actions (`.github/workflows/ci.yml`); los deploys los dispara la app de Render conectada al repo en cada push a `main`.
+
+### Archivos de deploy
+
+- [`render.yaml`](render.yaml) · IaC de Render (backend + frontend)
+- [`Dockerfile`](Dockerfile) · imagen multi-stage del backend (python:3.11-slim, non-root, uvicorn)
+- [`.dockerignore`](.dockerignore) · excluye tests/docs/secrets del build context
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) · lint + tests + build en cada PR
+- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) · fallback opcional vía deploy hooks
+
+### Pasos manuales del CEO (post-merge)
+
+**1. Render · conectar el blueprint**
+
+1. Ingresar a <https://dashboard.render.com> con la cuenta RODDOS
+2. `New` → `Blueprint` → conectar el repo `RoddosColombia/ARGOS`
+3. Render detecta `render.yaml` y aprovisiona `argos-backend` y `argos-frontend`
+4. En el dashboard de `argos-backend`, setear en `Environment` los valores marcados `sync: false`:
+   - `JWT_SECRET` → `python -c "import secrets; print(secrets.token_urlsafe(64))"`
+   - `MONGODB_URI` → connection string de Atlas `argos-prod`
+   - `ADMIN_EMAIL` → `ceo@roddos.com`
+   - `ADMIN_PASSWORD_HASH` → `python -c "import bcrypt; print(bcrypt.hashpw(b'TU_PASSWORD', bcrypt.gensalt()).decode())"`
+5. En `argos-frontend`, no hay secrets · `VITE_ARGOS_API_URL` ya está en el blueprint
+6. Verificar primer deploy verde · curl `https://argos-backend.onrender.com/api/v1/health` debe devolver 200
+
+**2. GoDaddy · DNS para argos.roddos.com**
+
+En `DNS Management` del dominio `roddos.com`, crear dos registros CNAME:
+
+| Tipo | Host | Apunta a | TTL |
+|---|---|---|---|
+| CNAME | `argos` | `argos-frontend.onrender.com` | 1h |
+| CNAME | `api.argos` | `argos-backend.onrender.com` | 1h |
+
+**3. Render · agregar custom domains**
+
+En cada servicio: `Settings` → `Custom Domains`:
+
+- `argos-frontend`: agregar `argos.roddos.com` · Render emite cert Let's Encrypt automático
+- `argos-backend`: agregar `api.argos.roddos.com` · idem
+
+**4. Validación end-to-end**
+
+```bash
+curl https://api.argos.roddos.com/api/v1/health          # 200 OK
+curl https://api.argos.roddos.com/api/v1/health/deep     # 200 OK con mongodb.state=ok
+open https://argos.roddos.com                             # login page
+```
+
+### Atajos útiles
+
+- **Auto-deploy:** ya habilitado vía GitHub app de Render · cada push a `main` despliega ambos servicios
+- **Deploy manual:** `Manual Deploy` → `Clear build cache & deploy` en el dashboard
+- **Rollback:** `Events` → elegir deploy anterior → `Rollback`
+- **Logs vivos:** `Logs` en cada servicio · también `render logs --service argos-backend --tail` con Render CLI
+
+### Opcional · deploy hooks
+
+Si preferís disparar deploys desde CI en vez de la app de Render, setea en `Settings → GitHub Secrets` del repo:
+- `RENDER_DEPLOY_HOOK_BACKEND`
+- `RENDER_DEPLOY_HOOK_FRONTEND`
+
+El workflow `deploy.yml` los llama. Si no están definidos, el workflow es no-op.
 
 ---
 

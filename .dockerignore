@@ -31,6 +31,7 @@ docs/
 .env.*
 !.env.example
 *.md
+!README.md                # requerido por pyproject.toml (readme = "README.md") y por COPY del Dockerfile
 Dockerfile
 .dockerignore
 render.yaml

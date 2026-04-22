@@ -1,6 +1,6 @@
 import { clearSession, readSession } from "@/lib/auth";
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+const API_BASE = (import.meta.env.VITE_ARGOS_API_URL as string | undefined) ?? "";
 
 export class ApiError extends Error {
   constructor(

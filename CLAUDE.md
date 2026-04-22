@@ -161,6 +161,16 @@ Cada PR que cierre un build debe actualizar la bitácora docs/claude/phase_X.md 
 - Smoke tests obligatorios al cierre de cada build
 - Tests de integración con mocks para todos los partners externos
 
+### 5.4 CI como gate de merge (no negociable)
+
+**Ningún PR se mergea con checks de CI en rojo.** Aplica a todos los workflows del repo (hoy: `Backend · ruff + pytest` y `Frontend · tsc + vitest + vite build`).
+
+- Si un check falla, la rama se arregla primero · force-push al mismo branch si es necesario · esperar CI verde · entonces mergear.
+- Excepciones requieren autorización escrita del CEO en el PR y se registran en `docs/claude/errores_recurrentes.md`.
+- Flakes conocidos se ignoran solo tras documentarlos en `docs/claude/deuda_tecnica.md` con ETA de fix.
+- Branch protection en `main` enforza la regla a nivel GitHub · no depender del honor system.
+- Agentes (Claude Code incluido) no mergean PRs con CI rojo aunque el humano lo pida sin justificación escrita.
+
 ## 6. Política de partners externos
 
 | Partner | Función | Criticidad | Modo |

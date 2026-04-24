@@ -42,7 +42,7 @@ where = ["src/backend"]
 testpaths = ["tests/backend"]
 asyncio_mode = "auto"
 addopts = "-v --strict-markers"
-pythonpath = ["src/backend"]
+pythonpath = ["src/backend", "."]
 
 [tool.ruff]
 line-length = 120

@@ -68,6 +68,35 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         IndexModel([("status", ASCENDING)], name="status"),
     ])
 
+    # ─── products_catalog (Build 1.0) ────────────────────────────────────────
+    created[col.PRODUCTS_CATALOG] = await db[col.PRODUCTS_CATALOG].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("sku_normalizado", ASCENDING)],
+            name="workspace_sku",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("source", ASCENDING), ("source_id", ASCENDING)],
+            name="workspace_source_id_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("categoria", ASCENDING)],
+            name="workspace_categoria",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("updated_at", DESCENDING)],
+            name="workspace_updated_desc",
+        ),
+    ])
+
+    # ─── products_history (Build 1.0 · time series) ──────────────────────────
+    created[col.PRODUCTS_HISTORY] = await db[col.PRODUCTS_HISTORY].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("product_id", ASCENDING), ("timestamp", DESCENDING)],
+            name="workspace_product_ts",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

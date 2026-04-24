@@ -171,7 +171,11 @@ Schema fiel al Build 20 de RODDOS, con marca de origen `argos`.
 | created_at | datetime | |
 | updated_at | datetime | |
 
-Índices: (workspace_id, sku_normalizado) · (workspace_id, source, source_id) · (workspace_id, categoria) · (workspace_id, updated_at)
+Índices: `(workspace_id, sku_normalizado)` · `(workspace_id, source, source_id)` **unique** · `(workspace_id, categoria)` · `(workspace_id, updated_at)`
+
+**Nota sobre `sku_normalizado` (Build 1.0):** convención actual es `{source}:{source_id}` (ej. `meli:MCO-12345`). Build 1.1 introducirá Haiku para agrupar variantes del mismo producto bajo un SKU canónico real (ej. `repuesto.freno.pastilla.tvs-raider-125`). Hasta entonces, `sku_normalizado` actúa como FK estable por-item, no como identificador semántico.
+
+**Nota sobre `categoria` (Build 1.0):** queda **vacía** (`""`) en Build 1.0 · Build 1.1 (Haiku categorizer) genera la jerarquía `repuestos.frenos.pastillas`. El campo auxiliar `categoria_meli_id` persiste el `category_id` crudo que devuelve MELI para referencia futura.
 
 ## Colección: products_history
 

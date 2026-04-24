@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from argos import __version__
 from argos.api.v1.health import router as health_router
+from argos.api.v1.scout import router as scout_router
 from argos.auth.router import router as auth_router
 from argos.auth.user_store import EnvUserStore, MongoUserStore, set_user_store
 from argos.config import get_settings
@@ -18,6 +19,7 @@ from argos.db.seed import seed_initial_data
 from argos.logging_config import configure_logging
 from argos.middleware.request_logging import RequestLoggingMiddleware
 from argos.middleware.workspace import WorkspaceIdMiddleware
+from argos.scheduler import start_scheduler, stop_scheduler
 
 logger = logging.getLogger("argos.main")
 
@@ -34,6 +36,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await seed_initial_data(db)
         set_user_store(MongoUserStore(db))
         logger.info("mongo_ready", extra={"database": settings.mongodb_database})
+
+        if not settings.disable_scheduler:
+            start_scheduler(db, env=settings.env)
+        else:
+            logger.info("scheduler_disabled_by_setting")
     else:
         set_user_store(EnvUserStore())
         logger.warning("mongo_not_configured_using_env_user_store")
@@ -41,6 +48,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        stop_scheduler()
         await close_mongo()
 
 
@@ -68,6 +76,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(scout_router)
 
     return app
 

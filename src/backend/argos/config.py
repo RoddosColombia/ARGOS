@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     cors_origins: str = Field(default="", alias="ARGOS_CORS_ORIGINS")
 
+    disable_scheduler: bool = Field(default=False, alias="ARGOS_DISABLE_SCHEDULER")
+
     @property
     def cors_origin_list(self) -> list[str]:
         if not self.cors_origins:

@@ -1,5 +1,14 @@
 # Phase 0 — Bootstrap de infraestructura
 
+> **✅ FASE CERRADA · 23 de abril de 2026.** Infraestructura completa y verificada end-to-end.
+>
+> - **Backend live:** https://argos-2fgp.onrender.com · `/api/v1/health` 200 · `/api/v1/health/deep` con `mongodb.state=ok`
+> - **Frontend live:** Render Static Site `argos-frontend` (interno) · custom domain `argos.roddos.com` verificado
+> - **MongoDB Atlas:** cluster `argos-prod` (M2) conectado · colecciones + índices provisionados · seed RODDOS + CEO aplicado
+> - **CI/CD:** 2 jobs (backend ruff+pytest · frontend tsc+vitest+build) gateando cada PR · Render GitHub app auto-despliega en push a `main`
+> - **Cierre de Phase 0:** 6 builds mergeados (0.1 → 0.5) · Builds 0.6-0.9 diferidos como deuda operacional (Langfuse, baseline, System User/Service Account ARGOS · ver `docs/claude/deuda_tecnica.md` para re-priorización)
+> - **Próxima phase:** Phase 1 · Marketplace MELI + Trends + Scout + Briefing v1
+
 ## Objetivo declarado
 Infraestructura base operativa + credenciales ARGOS creadas dentro de BM/MCC existentes de RODDOS + estructura de carpetas docs/canonicas + docs/claude + docs/knowledge creada y commiteada.
 

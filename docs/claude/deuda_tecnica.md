@@ -94,6 +94,49 @@ Build 0.5 v1 incluía `.github/workflows/deploy.yml` con fallback vía `RENDER_D
 
 ---
 
+## DT-004 · APScheduler in-memory single-instance · no tolera escale horizontal
+
+**Creada:** 2026-04-23 (Phase 1 / Build 1.0)
+**Prioridad:** baja hasta Phase 3+ · media cuando haya 2+ instancias de backend en Render
+**Owner:** @backend
+**Phase objetivo para resolver:** Phase 3+ (cuando WhatsApp Agent obligue a escalar)
+**Estado:** pendiente
+
+### Contexto
+
+Build 1.0 usa `AsyncIOScheduler` de APScheduler 3.x con jobstore **in-memory**. El backend corre en Render Starter (1 dyno) · un solo proceso ejecuta todos los jobs periódicos (hoy: `scout_tick` cada 6h en prod, 24h en dev).
+
+### Por qué se difirió
+
+- Escalar a Mongo-backed jobstore (`apscheduler.jobstores.mongodb.MongoDBJobStore`) suma complejidad y requiere cluster multi-instancia para pagar
+- En Phase 1 no hay necesidad de alta disponibilidad del scheduler · si Render reinicia la instancia, el próximo tick ocurre a los 6h máximo (aceptable)
+- Redis + Celery sería la alternativa "robusta" pero introduce 2 servicios nuevos (broker + worker pool) sin beneficio inmediato
+
+### Trade-off aceptado
+
+- Si Render corre 2+ instancias simultáneas (autoscale), cada una dispararía el tick → duplicación de escrituras a Mongo. Mitigado parcialmente porque `upsert_product` es idempotente a nivel source_id, pero se emitirían eventos duplicados al bus (viola espíritu de ROG-A6 "append-only" con semántica lógica única).
+- Si el dyno cae a mitad de un tick, el trabajo se pierde silenciosamente. No hay persistencia del estado del job.
+- Reemplazar APScheduler por Celery+Redis requeriría refactor del endpoint `POST /api/v1/scout/trigger` (hoy ejecuta in-process) y del lifespan de main.py.
+
+### Señales para re-evaluar
+
+- Autoscale de Render encendido (2+ instancias)
+- Llegada de más jobs periódicos en Phase 2+ (briefing diario, impact tracking, price monitors de SKUs prioritarios cada 15 min)
+- Necesidad de ver el estado de jobs desde UI (Flower o similar)
+- Latencia del tick > 30s consistentemente (scheduler bloquea otros jobs)
+
+### Mitigaciones activas
+
+- `max_instances=1 + coalesce=True` en el job · evita overlap si un tick se retrasa
+- Jobs son **idempotentes por diseño** (upsert, no insert) · ejecución duplicada no corrompe datos
+- Endpoint manual `POST /api/v1/scout/trigger` (CEO/sistema) permite disparar ticks bajo demanda si el scheduler deja de funcionar
+
+### Tags
+
+#infra #scheduler #apscheduler #scale
+
+---
+
 ## DT-003 · Sin runtime pinning fino (patch de Python) más allá de runtime.txt
 
 **Creada:** 2026-04-22 (Phase 0 / Build 0.5 v2)

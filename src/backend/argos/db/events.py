@@ -72,3 +72,66 @@ async def publish_event(
         extra={"event_id": event_id, "event_type": event_type, "workspace_id": workspace_id},
     )
     return doc
+
+
+# ─── Helpers específicos por dominio (Build 1.0) ─────────────────────────
+
+
+async def publish_marketplace_product_detected(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    sku_normalizado: str,
+    source: str,
+    source_id: str,
+    nombre: str,
+    categoria: str,
+    precio_actual: float,
+    created: bool,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="marketplace.product.detected",
+        workspace_id=workspace_id,
+        producer="marketplace_agent",
+        payload={
+            "sku_normalizado": sku_normalizado,
+            "source": source,
+            "source_id": source_id,
+            "nombre": nombre,
+            "categoria": categoria,
+            "precio_actual": precio_actual,
+            "created": created,
+        },
+        correlation_id=correlation_id,
+    )
+
+
+async def publish_marketplace_price_changed(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    sku_normalizado: str,
+    source: str,
+    source_id: str,
+    price_before: float,
+    price_after: float,
+    delta_pct: float,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="marketplace.price.changed",
+        workspace_id=workspace_id,
+        producer="marketplace_agent",
+        payload={
+            "sku_normalizado": sku_normalizado,
+            "source": source,
+            "source_id": source_id,
+            "price_before": price_before,
+            "price_after": price_after,
+            "delta_pct": delta_pct,
+        },
+        correlation_id=correlation_id,
+    )

@@ -12,6 +12,7 @@ os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["JWT_ACCESS_TOKEN_TTL_MINUTES"] = "60"
 os.environ["MONGODB_URI"] = ""
 os.environ["MONGODB_DATABASE"] = "argos_test"
+os.environ["ARGOS_DISABLE_SCHEDULER"] = "true"
 os.environ.setdefault("ADMIN_EMAIL", "ceo-test@roddos.com")
 os.environ.setdefault("ADMIN_ROLE", "ceo")
 os.environ.setdefault("ADMIN_WORKSPACE_ID", "RODDOS")

@@ -116,16 +116,17 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Campo | Valor |
 |-------|-------|
 | Función | Datos de marketplace MELI Colombia para inteligencia de repuestos |
-| Estado | Nueva integración (Phase 1) |
+| Estado | Producción parcial desde Build 1.0 (search + item públicos · sin OAuth) |
 | Criticidad | Alta |
-| Auth | OAuth 2.0 |
-| SDK | mercadolibre/python-sdk oficial |
-| Endpoints clave | `/sites/MCO/search` · `/items/{id}` · `/users/{seller_id}` |
-| Rate limit | Estándar MELI · respetar (ROG-A8) |
-| Eventos producidos | marketplace.product.detected, marketplace.price.changed |
-| Costo | Gratis |
+| Auth | OAuth 2.0 (diferido · solo si se necesita seller data privada en builds futuros) |
+| SDK | **Sin SDK oficial** en Build 1.0 · `httpx.AsyncClient` directo sobre endpoints públicos · revisar `mercadolibre/python-sdk` cuando se agregue OAuth |
+| Endpoints clave | `GET /sites/MCO/search?q=&limit=&offset=` · `GET /items/{id}` · `GET /users/{seller_id}` (último no usado hasta OAuth) |
+| Rate limit | No observado límite público hasta ~10 req/s · respetar (ROG-A8) con `asyncio.Semaphore(5)` en el cliente |
+| Eventos producidos | `marketplace.product.detected` · `marketplace.price.changed` (threshold ≥ 5%) |
+| Costo | Gratis (endpoints públicos) |
 | Fallback | Si cae: scraping con Scrapling como respaldo (con respeto a robots.txt) |
-| Dueño | ARGOS Phase 1 |
+| Dueño | ARGOS Phase 1 Build 1.0+ |
+| Notas de implementación | `argos/partners/meli/client.py` · context-manager async · maneja 404 y 429 con `MeliError`. Consumido por `agents/marketplace/service.py::upsert_product` (normaliza y persiste en `products_catalog`). |
 
 ## Meta Marketing API + Meta Ad Library
 

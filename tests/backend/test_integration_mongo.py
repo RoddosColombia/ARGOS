@@ -65,7 +65,8 @@ async def indexed_db(mongo_db: AsyncIOMotorDatabase) -> AsyncIOMotorDatabase:
 
 async def test_ensure_indexes_creates_all_expected(mongo_db: AsyncIOMotorDatabase) -> None:
     created = await ensure_indexes(mongo_db)
-    assert set(created.keys()) == set(col.ALL_BUILD_0_3)
+    # ensure_indexes cubre Build 0.3 y Build 1.0 · las de 0.3 deben estar incluidas
+    assert set(col.ALL_BUILD_0_3).issubset(set(created.keys()))
 
     # Verificar nombres de índices en cada colección
     workspaces_idx = await mongo_db[col.WORKSPACES].index_information()

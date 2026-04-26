@@ -152,6 +152,40 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── social_accounts (Build 2.3 · Social Listening) ──────────────────────
+    created[col.SOCIAL_ACCOUNTS] = await db[col.SOCIAL_ACCOUNTS].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("plataforma", ASCENDING), ("username", ASCENDING)],
+            name="workspace_plataforma_username_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("relevancia_score", DESCENDING)],
+            name="workspace_relevancia_desc",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("seguidores", DESCENDING)],
+            name="workspace_seguidores_desc",
+        ),
+    ])
+
+    # ─── social_posts (Build 2.3) ────────────────────────────────────────────
+    created[col.SOCIAL_POSTS] = await db[col.SOCIAL_POSTS].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("post_external_id", ASCENDING)],
+            name="workspace_post_external_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("vistas", DESCENDING)],
+            name="workspace_vistas_desc",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("fecha_publicacion", DESCENDING)],
+            name="workspace_fecha_publicacion_desc",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

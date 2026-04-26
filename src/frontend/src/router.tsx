@@ -5,6 +5,7 @@ import { CompetitorsPage } from "@/pages/CompetitorsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
+import { SocialPage } from "@/pages/SocialPage";
 import { TrendsPage } from "@/pages/TrendsPage";
 
 export const router = createBrowserRouter([
@@ -45,6 +46,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <CompetitorsPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/social",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <SocialPage />
         </Layout>
       </ProtectedRoute>
     ),

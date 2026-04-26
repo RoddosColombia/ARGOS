@@ -75,7 +75,8 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | trends.keyword.spiking | trends | strategist | {keyword, search_volume, growth_pct, vertical} · (legacy · ver `trends.keyword.spike` Build 1.3) |
 | trends.keyword.spike | trends_agent | strategist | {keyword, interest_over_time (0-100), delta_7d_pct} · emitido por TrendsAgent cuando delta 7d > 30% O interest >= 80 |
 | marketplace.price.alert | alerts_agent | strategist, executive (CEO dashboard) | {sku_normalizado, titulo, precio_anterior, precio_actual, delta_pct, fuente: meli/fb, competitor_url} · emitido cuando drop ≥ 15% en últimas 24h |
-| social.account.viral_detected | social | strategist | {account_id, platform: ig/tiktok, post_id, views, vertical} |
+| social.account.viral_detected | social | strategist | {account_id, platform: ig/tiktok, post_id, views, vertical} · (legacy · ver `social.account.trending` Build 2.3) |
+| social.account.trending | social_agent | strategist, executive | {plataforma, username, seguidores, relevancia_score, fuente_query} · emitido por SocialAgent cuando una cuenta nueva (no existía antes) entra al catálogo `social_accounts` |
 | social.reel.viral | social | strategist | {post_id, platform, views, engagement_rate, related_skus} |
 
 ### Dominio: Strategist y decisiones

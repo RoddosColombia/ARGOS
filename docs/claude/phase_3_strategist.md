@@ -23,6 +23,24 @@ Cerebro de decisión (Strategist con Sonnet 4.6) + interfaz operativa al CEO (Ex
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 3.2 · GraphRAG + Embeddings (Qdrant + OpenAI) (2026-04-26)
+
+- **Qdrant self-hosted en Render** · cliente async via `qdrant-client>=1.10` · `AsyncQdrantClient(url, api_key)` lazy-init · skip silencioso si `QDRANT_URL` vacío. Dos colecciones fijas: `products_embeddings` y `ads_embeddings`, ambas dim=1536 distance=COSINE. `ensure_collections()` idempotente · primero hace `get_collections` y solo crea las que faltan (no altera dim/distance de las existentes · si cambia, requiere migration manual).
+- **OpenAI `text-embedding-3-small` (1536 dim)** como único proveedor en Build 3.2. `VOYAGE_API_KEY` env reservada · NO se implementa por mismatch de dim (voyage-3 = 1024, voyage-3-large = 1024). Para Voyage haría falta colecciones Qdrant separadas con dim=1024 y enrutamiento por workspace · DT futura cuando el costo de OpenAI lo justifique.
+- **`MemoryAgent.enabled = qdrant.enabled AND embedder.enabled`.** Si solo uno de los dos está configurado, el agente queda disabled. Razón: sin Qdrant no podemos persistir, sin OpenAI no podemos vectorizar · ninguna acción tiene sentido a medias. Decisión opuesta sería "embed igual y guardar text en Mongo como fallback" · descartado por complejidad sin beneficio claro.
+- **Skip silencioso 100% del flujo** sin las dos credenciales: `embed_pending_job` retorna `{skipped: 1}`, endpoint `/api/v1/memory/search` retorna `[]` con log warning, Strategist sigue funcionando sin enriquecimiento. NO error 500 nunca · cumple el spec "search retorna lista vacía con log warning".
+- **`embedded_at` field en products_catalog y ads_library** marca docs ya procesados. Job query: `{$or: [{embedded_at: null}, {embedded_at: {$exists: false}}]}` · cubre ambos casos (campo ausente en docs viejos + null en docs marcados como pending re-embed). Cuando se quiere forzar re-embed (ej. cambio de modelo de embeddings), `db.collection.updateMany({}, {$set: {embedded_at: null}})` re-encola todo.
+- **Texto de embedding curado por tipo:**
+  - Productos: `nombre · Compatible: motos · Categoría: cat` (incluye compatible_motos para que "aceite TVS Raider" matchee productos generales si están etiquetados con TVS Raider)
+  - Ads: `anunciante · copy_titulo · copy_texto[:500]` (truncado · ads largos no aportan más al matching semántico)
+  - Sin metadata estructurada en el texto de embedding (precio, fechas, etc.) · esos van como payload Qdrant para filtros · no como señal semántica.
+- **Filtro `workspace_id` en cada search** · Qdrant `Filter(must=[FieldCondition(workspace_id == X)])`. ROG-A3 enforced a nivel vector store · una búsqueda nunca cruza tenants aunque comparta colección.
+- **Strategist enriquecimiento opcional · NO breaking** · `gather_signals(memory_agent=None)` mantiene el comportamiento Build 3.1. `Executive.run_morning_briefing(use_memory=True)` (default) construye `_build_default_agent()` y lo inyecta · si MemoryAgent no enabled → sigue como antes. El briefing no se rompe si Qdrant cae.
+- **Top-2 señales × top-3 similares = max 6 items relacionados** por categoría (productos + ads). Razón: limitar input tokens al Strategist · no inflar contexto con info marginal. Si las primeras 2 señales no producen hits útiles, las siguientes tampoco (por correlación temática del día).
+- **`memory_embed_job` cron 6h** vs Briefing 06:45 cron daily. Razón: nuevos productos/ads aparecen cada tick del Scout (6h MELI) y de competitors (12h). Cada 6h embed pendientes · cuando llega el briefing 06:45, los items del día ya están en Qdrant.
+- **Voyage stub completo en config** (`voyage_api_key`) pero sin código que la consuma · evita confusión sobre "está implementado o no". El env var existe como contract para futuro · documentado como DT en `docs/knowledge/agents/memory.md`.
+- **Tests con FakeQdrant + FakeEmbedder** · subclasses que sobrescriben los métodos públicos. Los reales nunca se llaman en CI. Coverage del wiring (qué se llama con qué args) sin pegar a red. El job real se valida con re-run idempotency check (segunda corrida = 0 nuevos productos embedded).
+
 ### Build 3.1 · Morning Briefing (2026-04-26)
 
 - **Modelo del Strategist: Sonnet 4.6 · NO Opus 4.7.** modelos_llm.md original recomendaba Opus para Strategist por "calidad > velocidad en producto estrella diario". Build 3.1 arranca con Sonnet por costo (5x más barato por output token) y porque el razonamiento sobre input estructurado (JSON de signals) no requiere la profundidad de Opus. El CEO puede pedir upgrade a Opus en Build 3.2+ si la calidad cualitativa del briefing es insuficiente · canary contra dataset de briefings reales antes de cambiar.
@@ -38,6 +56,11 @@ Cerebro de decisión (Strategist con Sonnet 4.6) + interfaz operativa al CEO (Ex
 - **`logger.info("briefing_published", extra={...})` debe evitar keys reservadas de LogRecord.** Inicialmente usé `extra={"created": True}` que colisiona con `LogRecord.created` (timestamp built-in de Python logging). Renombrado a `was_created`. Documentado en errores recurrentes · cualquier helper que loguee con extra keys debe consultar la lista de reservadas (created, name, msg, levelname, etc.).
 
 ## Cambios en canónicas
+
+### Build 3.2
+- `docs/canonicas/colecciones_mongo.md` · campo `embedded_at: datetime nullable` agregado en `products_catalog` y `ads_library` (Build 3.2)
+- `docs/canonicas/apis_externas.md` · secciones nuevas para OpenAI (text-embedding-3-small) y Qdrant (vector DB self-hosted)
+- `docs/knowledge/agents/memory.md` · NUEVO archivo · documentación completa del MemoryAgent · rol, lifecycle, schema payload Qdrant, skip silencioso, ROGs aplicadas
 
 ### Build 3.1
 - `docs/canonicas/colecciones_mongo.md` · sección nueva `briefings` con schema completo (fecha key, mercado_24h, acciones_del_dia, estado_mercado, tokens_*, idempotencia por (workspace, fecha))

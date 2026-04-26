@@ -88,8 +88,13 @@ async def run_morning_briefing(
     workspace_id: str = "RODDOS",
     strategist: StrategistAgent | None = None,
     executive: ExecutiveAgent | None = None,
+    use_memory: bool = True,
 ) -> dict[str, Any]:
-    """Job entrypoint: Strategist genera + Executive publica · usado por scheduler."""
+    """Job entrypoint: Strategist genera + Executive publica · usado por scheduler.
+
+    Build 3.2: si `use_memory=True` y MemoryAgent está habilitado (Qdrant + OpenAI
+    configurados), el Strategist enriquece signals con productos/ads similares.
+    """
     settings = get_settings()
     if strategist is None:
         if not settings.anthropic_api_key:
@@ -99,11 +104,24 @@ async def run_morning_briefing(
     if executive is None:
         executive = ExecutiveAgent()
 
-    briefing = await strategist.generate_morning_briefing(db, workspace_id)
-    result = await executive.publish_briefing(db, briefing, workspace_id=workspace_id)
-    return {
-        "fecha": result.fecha,
-        "created": result.created,
-        "num_acciones": result.num_acciones,
-        "modelo_usado": briefing.modelo_usado,
-    }
+    memory_agent = None
+    if use_memory:
+        # Lazy import · evita ciclo Strategist→Memory→Strategist
+        from argos.agents.memory.service import _build_default_agent
+        memory_agent = _build_default_agent()
+
+    try:
+        briefing = await strategist.generate_morning_briefing(
+            db, workspace_id, memory_agent=memory_agent
+        )
+        result = await executive.publish_briefing(db, briefing, workspace_id=workspace_id)
+        return {
+            "fecha": result.fecha,
+            "created": result.created,
+            "num_acciones": result.num_acciones,
+            "modelo_usado": briefing.modelo_usado,
+            "memory_enabled": memory_agent is not None and memory_agent.enabled,
+        }
+    finally:
+        if memory_agent is not None:
+            await memory_agent._qdrant.close()

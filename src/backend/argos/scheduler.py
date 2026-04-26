@@ -17,6 +17,7 @@ from argos.agents.alerts.service import check_price_drops
 from argos.agents.competitors.google_ads_service import refresh_google_ads
 from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.executive.service import run_morning_briefing
+from argos.agents.memory.service import embed_pending_job
 from argos.agents.scout.service import tick as scout_tick
 from argos.agents.social.service import refresh_social
 from argos.agents.trends.service import refresh_trends
@@ -85,6 +86,14 @@ async def _morning_briefing_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_morning_briefing", extra=result)
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_morning_briefing_failed")
+
+
+async def _memory_embed_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await embed_pending_job(db)
+        logger.info("scheduled_memory_embed", extra=stats)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_memory_embed_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -175,6 +184,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=CronTrigger(hour=6, minute=45),
         id="morning_briefing",
         name="Morning Briefing · Strategist + Executive · Sonnet 4.6",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Memory embeddings · cada 6h embed productos + ads pendientes
+    scheduler.add_job(
+        _memory_embed_job,
+        args=[db],
+        trigger=IntervalTrigger(hours=6),
+        id="memory_embed",
+        name="Memory embed · OpenAI text-embedding-3-small + Qdrant upsert",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

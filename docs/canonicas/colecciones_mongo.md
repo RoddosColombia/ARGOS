@@ -170,6 +170,7 @@ Schema fiel al Build 20 de RODDOS, con marca de origen `argos`.
 | imagen_url | string | |
 | created_at | datetime | |
 | updated_at | datetime | |
+| embedded_at | datetime nullable | (Build 3.2) timestamp del último upsert en Qdrant `products_embeddings` · null si pending |
 
 Índices: `(workspace_id, sku_normalizado)` · `(workspace_id, source, source_id)` **unique** · `(workspace_id, categoria)` · `(workspace_id, updated_at)`
 
@@ -217,6 +218,7 @@ Schema **canónico Build 2.1** · ads detectados en Meta Ad Library (futuro: Goo
 | primera_deteccion | datetime | timestamp de upsert inicial · `$setOnInsert` |
 | ultima_deteccion | datetime | timestamp del último scrape donde aparece |
 | created_at, updated_at | datetime | |
+| embedded_at | datetime nullable | (Build 3.2) timestamp del último upsert en Qdrant `ads_embeddings` · null si pending |
 | competitor_id | string | (futuro · cuando se cree colección `competitors`) |
 | sku_referenciado | string | (futuro · si Strategist lo asocia) |
 | estimado_spend | float | si SerpAPI lo da |

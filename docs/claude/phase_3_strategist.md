@@ -93,3 +93,64 @@ Cerebro de decisión (Strategist con Sonnet 4.6) + interfaz operativa al CEO (Ex
 - Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
 - Rama: `phase-3/build-3.1-morning-briefing` → PR a `main`
 - Próximo build: **3.2** — Recomendaciones de pricing con approval gate
+
+---
+
+## Build 3.3 · Impact Tracking + Sistema de Evals
+
+### Qué se construyó
+
+- **Persistencia de recomendaciones desde briefings** · `argos/agents/strategist/recommendations.py` con `persist_recommendations_from_briefing(db, briefing, *, workspace_id, briefing_id)`. Upsert idempotente por `(workspace_id, briefing_id, accion_index)` con `$setOnInsert` para `created_at` + `$addToSet` para `shown_in_briefing`. Deriva `type` con regex sobre el verbo de la acción (`bajar precio` → `pricing_change`, `activar promo` → `promo_launch`, etc.) y `priority_score` desde `prioridad` (Alta=0.9 / Media=0.6 / Baja=0.3). Construye `expected_impact={metric: "qualitative", target: ≤300chars, confidence: por prioridad}`.
+- **Job de impact evaluation** · `argos/agents/strategist/impact.py` con `evaluate_pending_recommendations(db, *, workspace_id, anthropic_client=None, eval_window_days=7)`. Lee recomendaciones con `status=ejecutada` y `executed_at ≤ now-7d` sin `actual_impact`, calcula `hit_rate_contribution` con heurística (`pricing_change` busca `marketplace.price.changed` events en ventana 7d con delta de la dirección esperada → 1.0/0.5/0.0; otros tipos → 0.5 default), genera `learning` con Sonnet 4.6 (250 max_tokens, 50-80 palabras post-mortem), persiste `actual_impact + evaluated_at + status="evaluada"`, emite `recommendation.evaluated`. Cron `07:00 UTC` (después del morning briefing).
+- **API REST** · `argos/api/v1/recommendations.py` con 4 endpoints (todos `require_role("ceo")`):
+  - `GET /api/v1/recommendations?status=&limit=20` — lista filtrada por workspace, ordenada por `priority_score desc + created_at desc`
+  - `GET /api/v1/recommendations/hit-rate?days=30` — promedio de `hit_rate_contribution` de recs evaluadas en últimos N días
+  - `POST /{rec_id}/approve` — `pendiente → aprobada` · setea `approved_by/approved_at` · emite `recommendation.approved`
+  - `POST /{rec_id}/reject` — `pendiente → rechazada` con `reason` opcional · emite `recommendation.rejected`
+- **Wiring del Executive** · `publish_briefing` ahora llama a `persist_recommendations_from_briefing` después del upsert del briefing · resuelve `_id` con `find_one` y propaga el contador en `PublishResult.recommendations_created`.
+- **Eventos del bus** · 4 nuevos publishers en `argos/db/events.py`: `recommendation.created/approved/rejected/evaluated` (versiones del schema `1.0`).
+- **Frontend `/recommendations`** · `RecommendationsPage.tsx` con widget de hit-rate (últimos 30 días) + lista con `approve/reject` botones (sólo en `pendiente`) · `Sidebar` agregó item "Recomendaciones" enabled · router con ruta protegida.
+- **Indices nuevos** (`db/indexes.py`):
+  - `(workspace_id, status, priority_score desc)` — list endpoint
+  - `(workspace_id, created_at desc)` — fallback cronológico
+  - `(workspace_id, briefing_id, accion_index)` **unique** con partial filter — idempotencia upsert
+  - `(workspace_id, executed_at)` con partial filter — driver del impact eval job
+
+### Decisiones técnicas
+
+- **Heurística de hit_rate placeholder** · Build 3.3 sólo decide bien para `pricing_change` (cruza con `marketplace.price.changed` events del bus). Otros tipos retornan 0.5 default hasta Phase 4 cuando el sync con SISMO V2 traiga datos de revenue/conversiones reales. `learning` lo genera Sonnet con la narrativa explícita "qué condiciones del mercado lo facilitaron" o "qué señal del input fue malinterpretada".
+- **Idempotencia robusta del briefing → recommendations** · Re-runs del morning briefing del mismo día no duplican recomendaciones. `briefing_id` viene del `_id` del doc en `briefings` (resuelto vía `find_one` post-upsert · upsert no expone `_id` cuando matchea existente). El índice unique con `partialFilterExpression: {briefing_id: {$exists: true}}` evita colisiones con docs legacy sin `briefing_id`.
+- **`shown_in_briefing` se acumula con `$addToSet`** · NO en `$setOnInsert`. Mongo error 40 (`Updating the path 'shown_in_briefing' would create a conflict`) si ambos coexisten apuntando al mismo path · ya documentado en errores recurrentes (Build 2.2 same issue con `keywords_pautadas`).
+- **Approve/reject son commit-and-event** · el endpoint sólo emite el evento si la `update_one({status: "pendiente"})` matched (atómico contra dobles clicks). Si el doc no estaba en `pendiente` retorna 404 (semántica "no encontrada en estado válido").
+- **Tests de impact evaluation usan mock de `anthropic_client`** · `_FakeAnthropicClient` con `.messages.create()` que devuelve content[0].text fijo · evita llamadas a la API en CI y reduce flakiness por timeouts.
+
+### Cambios en canónicas
+
+- `docs/canonicas/colecciones_mongo.md` · sección `recommendations` extendida con campos Build 3.3 (`briefing_id`, `accion_index`, `fecha_briefing`, `priority`, `evaluated_at`, `rejected_*`, `updated_at`), 4 índices nuevos documentados, lifecycle del status como diagrama de transiciones.
+- `docs/canonicas/eventos.md` · `recommendation.created/approved/rejected/evaluated` actualizados con productor real (`strategist_agent`/`executive_agent`), payloads efectivos del código, marcado Build 3.3+. `recommendation.measured` legacy marcado como deprecated (reemplazado por `recommendation.evaluated`).
+
+### Errores cometidos y cómo se resolvieron
+
+| Error | Causa raíz | Solución | Prevención futura |
+| --- | --- | --- | --- |
+| `WriteError: Updating the path 'shown_in_briefing' would create a conflict at 'shown_in_briefing'` (Mongo code 40) | `$setOnInsert: {shown_in_briefing: [fecha]}` + `$addToSet: {shown_in_briefing: fecha}` apuntan al mismo path · Mongo rechaza el write | Removido `shown_in_briefing` de `$setOnInsert` · `$addToSet` crea el array si no existe | Patrón ya conocido (Build 2.2 con `keywords_pautadas`) · documentado en `errores_recurrentes.md` · checklist mental: si una key se actualiza con `$addToSet`/`$push`, NO ponerla en `$setOnInsert` |
+
+### Deuda técnica generada
+
+- **Heurística de hit_rate todavía es placeholder para no-pricing.** `promo_launch`, `ad_campaign`, `inventory_reorder` retornan 0.5 default. Phase 4 (sync con SISMO V2 read-only) traerá ventas reales y permitirá medición concreta. DT-009.
+- **Sin endpoint manual `POST /{id}/execute`.** La transición `aprobada → ejecutada` queda como manual mongo update por el CEO o como acción del Media Buyer en Phase 8. Aceptable para Build 3.3.
+- **Sin retry en `_generate_learning` ante 429/503 de Anthropic.** Si Sonnet falla, el `learning` queda como mensaje fallback (`Auto-evaluación fallida ({tipo}) · hit_rate=X · revisar logs`) y la rec queda en `evaluada` con `actual_impact` correcto. Aceptable · el operador puede re-correr el job al día siguiente con un `$set: {status: "ejecutada", actual_impact: null}` puntual.
+
+### Métricas de la fase
+
+- Tests Build 3.3: 4 backend (`test_recommendations_api.py` 4 + `test_impact_evaluation.py` 4 = 8 nuevos) + 2 frontend (`RecommendationsPage.test.tsx`)
+- Total acumulado: **130 backend + 25 frontend = 155/155 passing**
+- Lint: `ruff check` limpio (1 fix automático aplicado en `scheduler.py` · 1 fix manual de E501 en `recommendations.py`)
+- Build frontend: 171 modules · 455 KB JS · sin warnings
+
+### Cierre
+
+#### Build 3.3 · 2026-04-26
+- Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
+- Rama: `phase-3/build-3.3-impact-tracking` → PR a `main`
+- Próximo build: **3.4** — refinamientos del Strategist (memory feedback loop con `learning` previas) o salto a Phase 4 (SISMO V2 sync + cobranza)

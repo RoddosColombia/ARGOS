@@ -83,11 +83,13 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 
 | event_type | Productor | Consumidores | Payload clave |
 |------------|-----------|--------------|---------------|
-| recommendation.created | strategist | executive, compliance_officer, sismo_sync | {recommendation_id, type, sku_affected, action, expected_impact, rationale} |
+| recommendation.created | strategist_agent | executive, compliance_officer, sismo_sync | {recommendation_id, type, priority: Alta/Media/Baja, action_description ≤300, expected_impact} · emitido por `persist_recommendations_from_briefing` en cada upsert nuevo desde un briefing · Build 3.3+ |
 | recommendation.compliance.validated | compliance_officer | executive | {recommendation_id, status: aprobado/rechazado_compliance, motivo} |
-| recommendation.approved | executive | media_buyer, audit_log | {recommendation_id, approved_by, approved_at} |
+| recommendation.approved | executive_agent | media_buyer, audit_log | {recommendation_id, approved_by ≤200} · emitido por `POST /api/v1/recommendations/{id}/approve` cuando la rec estaba en `pendiente` · Build 3.3+ |
+| recommendation.rejected | executive_agent | audit_log | {recommendation_id, rejected_by ≤200, reason ≤300} · emitido por `POST /{id}/reject` · Build 3.3+ |
 | recommendation.executed | media_buyer | strategist, audit_log | {recommendation_id, execution_id, external_ref} |
-| recommendation.measured | sismo_sync | strategist | {recommendation_id, actual_impact, hit_rate_contribution, learning} |
+| recommendation.evaluated | strategist_agent | dashboard, audit_log | {recommendation_id, hit_rate_contribution: 0.0/0.5/1.0} · emitido por `evaluate_pending_recommendations` (cron 07:00 UTC) tras medir impacto en ventana 7d · Build 3.3+ |
+| recommendation.measured | sismo_sync | strategist | {recommendation_id, actual_impact, hit_rate_contribution, learning} (deprecated · reemplazado por `recommendation.evaluated`) |
 
 ### Dominio: Media Buyer (pauta digital)
 

@@ -6,6 +6,7 @@ import { CompetitorsPage } from "@/pages/CompetitorsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
+import { RecommendationsPage } from "@/pages/RecommendationsPage";
 import { SocialPage } from "@/pages/SocialPage";
 import { TrendsPage } from "@/pages/TrendsPage";
 
@@ -67,6 +68,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <BriefingPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/recommendations",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <RecommendationsPage />
         </Layout>
       </ProtectedRoute>
     ),

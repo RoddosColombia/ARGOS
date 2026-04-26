@@ -9,6 +9,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: "Briefing", to: "/briefing", phase: "Phase 3", enabled: true },
+  { label: "Recomendaciones", to: "/recommendations", phase: "Phase 3", enabled: true },
   { label: "Marketplace", to: "/marketplace", phase: "Phase 1", enabled: true },
   { label: "Trends & Alertas", to: "/trends", phase: "Phase 1", enabled: true },
   { label: "Competidores", to: "/competitors", phase: "Phase 2", enabled: true },

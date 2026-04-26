@@ -13,6 +13,7 @@ from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from argos.agents.strategist.recommendations import persist_recommendations_from_briefing
 from argos.agents.strategist.service import MorningBriefing, StrategistAgent
 from argos.config import get_settings
 from argos.db import collections as col
@@ -26,6 +27,7 @@ class PublishResult:
     fecha: str
     created: bool
     num_acciones: int
+    recommendations_created: int = 0
 
 
 class ExecutiveAgent:
@@ -62,6 +64,18 @@ class ExecutiveAgent:
         created = result.upserted_id is not None
         num_acciones = len(briefing.acciones_del_dia)
 
+        # Build 3.3: resolver _id del briefing (upsert no lo expone si ya existía)
+        briefing_doc = await db[col.BRIEFINGS].find_one(
+            {"workspace_id": workspace_id, "fecha": briefing.fecha},
+            {"_id": 1},
+        )
+        briefing_id = str(briefing_doc["_id"]) if briefing_doc else ""
+        recs_created = 0
+        if briefing_id:
+            recs_created = await persist_recommendations_from_briefing(
+                db, briefing, workspace_id=workspace_id, briefing_id=briefing_id
+            )
+
         await publish_briefing_published(
             db,
             workspace_id=workspace_id,
@@ -77,9 +91,15 @@ class ExecutiveAgent:
                 "fecha": briefing.fecha,
                 "was_created": created,  # `created` colisiona con LogRecord built-in
                 "num_acciones": num_acciones,
+                "recommendations_created": recs_created,
             },
         )
-        return PublishResult(fecha=briefing.fecha, created=created, num_acciones=num_acciones)
+        return PublishResult(
+            fecha=briefing.fecha,
+            created=created,
+            num_acciones=num_acciones,
+            recommendations_created=recs_created,
+        )
 
 
 async def run_morning_briefing(
@@ -119,6 +139,7 @@ async def run_morning_briefing(
             "fecha": result.fecha,
             "created": result.created,
             "num_acciones": result.num_acciones,
+            "recommendations_created": result.recommendations_created,
             "modelo_usado": briefing.modelo_usado,
             "memory_enabled": memory_agent is not None and memory_agent.enabled,
         }

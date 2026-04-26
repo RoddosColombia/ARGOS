@@ -14,6 +14,7 @@ from argos.api.v1.competitors import router as competitors_router
 from argos.api.v1.health import router as health_router
 from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.memory import router as memory_router
+from argos.api.v1.recommendations import router as recommendations_router
 from argos.api.v1.scout import router as scout_router
 from argos.api.v1.social import router as social_router
 from argos.api.v1.trends import router as trends_router
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(social_router)
     app.include_router(briefing_router)
     app.include_router(memory_router)
+    app.include_router(recommendations_router)
 
     return app
 

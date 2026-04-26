@@ -199,6 +199,29 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── recommendations (Build 3.3 · Impact tracking) ───────────────────────
+    created[col.RECOMMENDATIONS] = await db[col.RECOMMENDATIONS].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("status", ASCENDING), ("priority_score", DESCENDING)],
+            name="workspace_status_priority",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("created_at", DESCENDING)],
+            name="workspace_created_desc",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("briefing_id", ASCENDING), ("accion_index", ASCENDING)],
+            name="workspace_briefing_accion_unique",
+            unique=True,
+            partialFilterExpression={"briefing_id": {"$exists": True}},
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("executed_at", ASCENDING)],
+            name="workspace_executed",
+            partialFilterExpression={"executed_at": {"$exists": True}},
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

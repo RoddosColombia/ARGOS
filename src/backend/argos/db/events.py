@@ -309,3 +309,98 @@ async def publish_briefing_published(
         },
         correlation_id=correlation_id,
     )
+
+
+# ─── Helpers Build 3.3 ───────────────────────────────────────────────────
+
+
+async def publish_recommendation_created(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    recommendation_id: str,
+    type_: str,
+    priority: str,
+    action_description: str,
+    expected_impact: dict[str, Any],
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="recommendation.created",
+        workspace_id=workspace_id,
+        producer="strategist_agent",
+        payload={
+            "recommendation_id": recommendation_id,
+            "type": type_,
+            "priority": priority,
+            "action_description": action_description[:300],
+            "expected_impact": expected_impact,
+        },
+        correlation_id=correlation_id,
+    )
+
+
+async def publish_recommendation_approved(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    recommendation_id: str,
+    approved_by: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="recommendation.approved",
+        workspace_id=workspace_id,
+        producer="executive_agent",
+        payload={
+            "recommendation_id": recommendation_id,
+            "approved_by": approved_by[:200],
+        },
+        correlation_id=correlation_id,
+    )
+
+
+async def publish_recommendation_rejected(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    recommendation_id: str,
+    rejected_by: str,
+    reason: str = "",
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="recommendation.rejected",
+        workspace_id=workspace_id,
+        producer="executive_agent",
+        payload={
+            "recommendation_id": recommendation_id,
+            "rejected_by": rejected_by[:200],
+            "reason": reason[:300],
+        },
+        correlation_id=correlation_id,
+    )
+
+
+async def publish_recommendation_evaluated(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    recommendation_id: str,
+    hit_rate_contribution: float,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="recommendation.evaluated",
+        workspace_id=workspace_id,
+        producer="strategist_agent",
+        payload={
+            "recommendation_id": recommendation_id,
+            "hit_rate_contribution": round(float(hit_rate_contribution), 4),
+        },
+        correlation_id=correlation_id,
+    )

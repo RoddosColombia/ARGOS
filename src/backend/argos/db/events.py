@@ -283,3 +283,29 @@ async def publish_social_account_trending(
         },
         correlation_id=correlation_id,
     )
+
+
+# ─── Helpers Build 3.1 ───────────────────────────────────────────────────
+
+
+async def publish_briefing_published(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    fecha: str,
+    num_acciones: int,
+    modelo_usado: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="briefing.published",
+        workspace_id=workspace_id,
+        producer="executive_agent",
+        payload={
+            "fecha": fecha,
+            "num_acciones": num_acciones,
+            "modelo_usado": modelo_usado,
+        },
+        correlation_id=correlation_id,
+    )

@@ -33,6 +33,15 @@ OPUS_MODEL = "claude-opus-4-7-20260416"
 
 **Regla inamovible:** NUNCA `claude-sonnet-latest` o `claude-opus-latest` en código de producción. Cualquier upgrade de versión pasa por canary con dataset de evals + PR review.
 
+## Uso actual de cada modelo (con caching)
+
+| Build | Agente | Modelo | Cache | Promp size | Notas |
+|-------|--------|--------|-------|------------|-------|
+| 1.1 | Scout (HaikuProductClassifier) | Haiku 4.5 | `cache_control: ephemeral` en system | ~3KB · 8 ejemplos few-shot | Cache local en proceso (dict) además del API cache |
+| 3.1 | Strategist (Morning Briefing) | **Sonnet 4.6** | `cache_control: ephemeral` en system | ~9KB · contexto RODDOS + 2 ejemplos | system prompt grande para amortizar con cache hit |
+
+**Nota Build 3.1**: El Strategist arrancó con Sonnet 4.6 (no Opus 4.7 como originalmente planeaba `modelos_llm.md` para "calidad > velocidad en producto estrella diario"). Razón pragmática: Sonnet es 5x más barato que Opus por output token y la calidad de razonamiento sobre input estructurado (signals JSON) es suficiente. Si el CEO reporta calidad insuficiente del briefing, upgrade a Opus 4.7 con canary contra dataset de briefings reales.
+
 ## Prompt caching
 
 OBLIGATORIO en todo system prompt > 1000 tokens. Esto aplica a:

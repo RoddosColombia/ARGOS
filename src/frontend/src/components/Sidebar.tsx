@@ -8,11 +8,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { label: "Briefing", to: "/briefing", phase: "Phase 3", enabled: true },
   { label: "Marketplace", to: "/marketplace", phase: "Phase 1", enabled: true },
   { label: "Trends & Alertas", to: "/trends", phase: "Phase 1", enabled: true },
   { label: "Competidores", to: "/competitors", phase: "Phase 2", enabled: true },
   { label: "Social Listening", to: "/social", phase: "Phase 2", enabled: true },
-  { label: "Briefing", to: "/briefing", phase: "Phase 1", enabled: false },
   { label: "Scoring", to: "/scoring", phase: "Phase 2", enabled: false },
   { label: "WhatsApp", to: "/whatsapp", phase: "Phase 3", enabled: false },
   { label: "Cobranza", to: "/cobranza", phase: "Phase 4", enabled: false },

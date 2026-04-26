@@ -103,8 +103,8 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 
 | event_type | Productor | Consumidores | Payload clave |
 |------------|-----------|--------------|---------------|
-| briefing.generation.started | scheduler | strategist, executive | {date, workspace_id} |
-| briefing.published | executive | audit_log | {briefing_id, date, top_actions_count, url_dashboard} |
+| briefing.generation.started | scheduler | strategist, executive | {date, workspace_id} (futuro · cuando haya tracing por phase del pipeline) |
+| briefing.published | executive_agent | audit_log, dashboard | {fecha: YYYY-MM-DD, num_acciones: int, modelo_usado: str} · emitido por ExecutiveAgent en cada upsert (incluye re-runs) · Build 3.1+ |
 | briefing.action.approved | executive (web UI) | strategist | {briefing_id, action_id, approved_by} |
 | briefing.action.rejected | executive (web UI) | strategist | {briefing_id, action_id, rejected_by, reason} |
 

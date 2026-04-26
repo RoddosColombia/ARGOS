@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { BriefingPage } from "@/pages/BriefingPage";
 import { CompetitorsPage } from "@/pages/CompetitorsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -56,6 +57,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <SocialPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/briefing",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <BriefingPage />
         </Layout>
       </ProtectedRoute>
     ),

@@ -55,6 +55,13 @@ ALL_BUILD_2_3: tuple[str, ...] = (
     SOCIAL_POSTS,
 )
 
+# ─── Build 3.1 ───────────────────────────────────────────────────────────
+BRIEFINGS = "briefings"
+
+ALL_BUILD_3_1: tuple[str, ...] = (
+    BRIEFINGS,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -63,4 +70,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_1_3
     + ALL_BUILD_2_1
     + ALL_BUILD_2_3
+    + ALL_BUILD_3_1
 )

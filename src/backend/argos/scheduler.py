@@ -16,6 +16,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from argos.agents.alerts.service import check_price_drops
 from argos.agents.competitors.google_ads_service import refresh_google_ads
 from argos.agents.competitors.meta_ads_service import refresh_meta_ads
+from argos.agents.executive.service import run_morning_briefing
 from argos.agents.scout.service import tick as scout_tick
 from argos.agents.social.service import refresh_social
 from argos.agents.trends.service import refresh_trends
@@ -76,6 +77,14 @@ async def _social_refresh_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_social_refresh", extra=stats.as_dict())
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_social_refresh_failed")
+
+
+async def _morning_briefing_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        result = await run_morning_briefing(db)
+        logger.info("scheduled_morning_briefing", extra=result)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_morning_briefing_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -154,6 +163,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=CronTrigger(hour=4, minute=0),
         id="social_refresh",
         name="Social refresh · TikHub IG/TikTok cuentas + posts virales",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Morning Briefing · diario 06:45 UTC (después de scout/trends/social/alerts)
+    scheduler.add_job(
+        _morning_briefing_job,
+        args=[db],
+        trigger=CronTrigger(hour=6, minute=45),
+        id="morning_briefing",
+        name="Morning Briefing · Strategist + Executive · Sonnet 4.6",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

@@ -329,9 +329,31 @@ Morning Briefings generados por StrategistAgent + persistidos por ExecutiveAgent
 | approved_at | datetime | |
 | executed_at | datetime | |
 | priority_score | float | 0.0-1.0 |
-| shown_in_briefing | array of dates | |
+| priority | enum | Alta/Media/Baja (texto · refleja `accion.prioridad` del Strategist) |
+| shown_in_briefing | array of dates | `$addToSet` en cada briefing que la incluye |
+| briefing_id | string | _id del briefing del que se derivó (Build 3.3) |
+| accion_index | int | índice 0-based dentro de `acciones_del_dia` (Build 3.3) |
+| fecha_briefing | string YYYY-MM-DD | fecha del briefing original |
+| evaluated_at | datetime | timestamp de cierre del job de impact evaluation |
+| rejected_by | string | nullable |
+| rejected_at | datetime | nullable |
+| rejected_reason | string | máx 300 chars |
+| updated_at | datetime | |
 
-Índices: (workspace_id, status, priority_score) · (workspace_id, created_at)
+Índices (Build 3.3):
+- `(workspace_id, status, priority_score desc)` — `workspace_status_priority`
+- `(workspace_id, created_at desc)` — `workspace_created_desc`
+- `(workspace_id, briefing_id, accion_index)` **unique** con `partialFilterExpression: {briefing_id: {$exists: true}}` — `workspace_briefing_accion_unique` (idempotencia del job de persistencia)
+- `(workspace_id, executed_at)` con `partialFilterExpression: {executed_at: {$exists: true}}` — `workspace_executed` (driver del impact evaluation job)
+
+**Idempotencia**: `persist_recommendations_from_briefing` upsert por `(workspace_id, briefing_id, accion_index)`. Re-runs del briefing del mismo día actualizan campos mutables (`action_description`, `rationale`, `priority`) pero NO crean duplicados ni resetean `created_at` (`$setOnInsert`). `shown_in_briefing` se acumula con `$addToSet`.
+
+**Lifecycle del status**:
+- `pendiente` → estado inicial al persistir desde briefing
+- `aprobada` → CEO aprueba vía `POST /api/v1/recommendations/{id}/approve` (sólo desde `pendiente`)
+- `rechazada` → CEO rechaza vía `POST /{id}/reject` con `reason` opcional
+- `ejecutada` → manual (o futuro Media Buyer) marca `executed_at`
+- `evaluada` → impact evaluation job (cron 07:00 UTC) lee `status=ejecutada` con `executed_at` ≥ 7d, calcula `hit_rate_contribution`, genera `learning` con Sonnet 4.6, persiste `actual_impact` + `evaluated_at`
 
 ## Colección: campaigns
 

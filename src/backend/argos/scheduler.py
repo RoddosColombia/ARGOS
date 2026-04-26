@@ -20,6 +20,7 @@ from argos.agents.executive.service import run_morning_briefing
 from argos.agents.memory.service import embed_pending_job
 from argos.agents.scout.service import tick as scout_tick
 from argos.agents.social.service import refresh_social
+from argos.agents.strategist.impact import evaluate_pending_recommendations
 from argos.agents.trends.service import refresh_trends
 
 logger = logging.getLogger("argos.scheduler")
@@ -94,6 +95,14 @@ async def _memory_embed_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_memory_embed", extra=stats)
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_memory_embed_failed")
+
+
+async def _impact_evaluation_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await evaluate_pending_recommendations(db)
+        logger.info("scheduled_impact_evaluation", extra=stats)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_impact_evaluation_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -184,6 +193,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=CronTrigger(hour=6, minute=45),
         id="morning_briefing",
         name="Morning Briefing · Strategist + Executive · Sonnet 4.6",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Impact evaluation · diario 07:00 UTC (después del morning briefing)
+    scheduler.add_job(
+        _impact_evaluation_job,
+        args=[db],
+        trigger=CronTrigger(hour=7, minute=0),
+        id="impact_evaluation",
+        name="Impact evaluation · evalúa recomendaciones ejecutadas hace 7+ días",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

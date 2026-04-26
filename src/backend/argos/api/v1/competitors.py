@@ -19,11 +19,14 @@ MAX_LIMIT = 200
 @router.get("/ads")
 async def list_ads(
     user: Annotated[UserOut, Depends(require_role("ceo"))],
-    source: Annotated[AdSource, Query(description="Filtra por plataforma")] = "meta",
+    source: Annotated[AdSource, Query(description="Filtra por plataforma · meta/google/all")] = "all",
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 50,
     only_active: Annotated[bool, Query(description="Solo ads activos")] = False,
 ) -> list[dict[str, Any]]:
-    """Lista ads del workspace · ordenados por fecha_inicio desc · rol ceo."""
+    """Lista ads del workspace · ordenados por fecha_inicio desc · rol ceo.
+
+    Build 2.2: el default es `all` (combina meta+google) · UI puede filtrar.
+    """
     if get_mongo_client() is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -53,6 +56,7 @@ async def list_ads(
             "formato": d.get("formato", "unknown"),
             "activo": bool(d.get("activo", False)),
             "fuente_query": d.get("fuente_query", ""),
+            "keywords_pautadas": list(d.get("keywords_pautadas") or []),
         }
         for d in docs
     ]

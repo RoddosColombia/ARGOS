@@ -62,23 +62,43 @@ class SerpApiClient:
         date_range: str = "now 7-d",
     ) -> dict[str, Any]:
         """Devuelve el JSON crudo del response de SerpAPI · `{}` si no enabled."""
+        return await self._search_json(
+            keyword,
+            params={
+                "engine": "google_trends",
+                "q": keyword,
+                "geo": geo,
+                "date": date_range,
+            },
+        )
+
+    async def google_ads_transparency(
+        self,
+        keyword: str,
+        *,
+        region: str = DEFAULT_GEO,
+    ) -> dict[str, Any]:
+        """Búsqueda en Google Ads Transparency Center · `{}` si no enabled."""
+        return await self._search_json(
+            keyword,
+            params={
+                "engine": "google_ads_transparency_center",
+                "text": keyword,
+                "region": region,
+            },
+        )
+
+    async def _search_json(self, label: str, *, params: dict[str, Any]) -> dict[str, Any]:
+        """Helper compartido · GET /search.json con manejo de errores común."""
         if not self.enabled or self._client is None:
-            logger.warning("serpapi_skipped_no_key", extra={"keyword": keyword})
+            logger.warning("serpapi_skipped_no_key", extra={"label": label})
             return {}
 
+        full_params = {**params, "api_key": self._api_key}
         try:
-            resp = await self._client.get(
-                "/search.json",
-                params={
-                    "engine": "google_trends",
-                    "q": keyword,
-                    "geo": geo,
-                    "date": date_range,
-                    "api_key": self._api_key,
-                },
-            )
+            resp = await self._client.get("/search.json", params=full_params)
         except httpx.HTTPError as exc:
-            logger.warning("serpapi_http_error", extra={"keyword": keyword, "error": str(exc)[:200]})
+            logger.warning("serpapi_http_error", extra={"label": label, "error": str(exc)[:200]})
             raise SerpApiError(0, f"http_error: {type(exc).__name__}") from exc
 
         if resp.status_code == 401:

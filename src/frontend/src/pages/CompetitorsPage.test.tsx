@@ -31,11 +31,12 @@ const SAMPLE = [
     formato: "video",
     activo: true,
     fuente_query: "pastillas freno moto",
+    keywords_pautadas: ["pastillas freno moto"],
   },
   {
     id: "doc-2",
-    plataforma: "meta",
-    ad_id_externo: "ARCHIVE-2",
+    plataforma: "google",
+    ad_id_externo: "G-CREATIVE-2",
     anunciante: "Motos & Repuestos JR",
     copy_texto: "Aceite Motul 4T 20W50 a domicilio",
     copy_titulo: "",
@@ -45,6 +46,7 @@ const SAMPLE = [
     formato: "image",
     activo: false,
     fuente_query: "aceite moto",
+    keywords_pautadas: ["aceite moto", "aceite Motul"],
   },
 ];
 
@@ -82,6 +84,9 @@ describe("CompetitorsPage", () => {
     expect(within(table).getByText("Motos & Repuestos JR")).toBeInTheDocument();
     expect(within(table).getByText("video")).toBeInTheDocument();
     expect(within(table).getByText("image")).toBeInTheDocument();
+    // Plataforma badges · ambas en la tabla
+    expect(within(table).getByText("Meta")).toBeInTheDocument();
+    expect(within(table).getByText("Google")).toBeInTheDocument();
     // Activo y pausado badges (texto exacto · "Días activo" del header se ignora)
     expect(within(table).getByText(/🟢 activo/)).toBeInTheDocument();
     expect(within(table).getByText(/⚪ pausado/)).toBeInTheDocument();
@@ -98,6 +103,7 @@ describe("CompetitorsPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const firstUrl = fetchMock.mock.calls[0][0] as string;
     expect(firstUrl).toContain("only_active=false");
+    expect(firstUrl).toContain("source=all");
 
     const checkbox = screen.getByTestId("only-active-checkbox");
     await userEvent.setup().click(checkbox);
@@ -105,6 +111,33 @@ describe("CompetitorsPage", () => {
     await waitFor(() => {
       const lastUrl = fetchMock.mock.calls[fetchMock.mock.calls.length - 1][0] as string;
       expect(lastUrl).toContain("only_active=true");
+    });
+  });
+
+  it("filtro por fuente cambia el source del query param", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200 })
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    renderPage();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const firstUrl = fetchMock.mock.calls[0][0] as string;
+    expect(firstUrl).toContain("source=all");
+
+    const select = screen.getByLabelText(/fuente/i) as HTMLSelectElement;
+    await userEvent.setup().selectOptions(select, "google");
+
+    await waitFor(() => {
+      const lastUrl = fetchMock.mock.calls[fetchMock.mock.calls.length - 1][0] as string;
+      expect(lastUrl).toContain("source=google");
+    });
+
+    await userEvent.setup().selectOptions(select, "meta");
+    await waitFor(() => {
+      const lastUrl = fetchMock.mock.calls[fetchMock.mock.calls.length - 1][0] as string;
+      expect(lastUrl).toContain("source=meta");
     });
   });
 });

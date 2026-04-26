@@ -200,9 +200,11 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Tier | 5K queries/mes (~$50/mes) |
 | SDK | **Sin SDK oficial async** · `httpx.AsyncClient` directo sobre `/search.json` |
 | Endpoint Build 1.3 | `GET /search.json?engine=google_trends&q=KEYWORD&geo=CO&date=now+7-d&api_key=...` |
-| Endpoints futuros | `/search.json?engine=google` (Build 1.4+) · `/search.json?engine=google_ads_transparency` (Phase 2) |
+| Endpoint Build 2.2 | `GET /search.json?engine=google_ads_transparency_center&text=KEYWORD&region=CO&api_key=...` (lista de `ad_creatives`) |
+| Endpoints futuros | `/search.json?engine=google` (Build 1.4+) |
 | Output `interest_over_time.timeline_data` | array de `{date, values: [{extracted_value: 0-100}]}` · TrendsAgent toma último valor + delta vs primero (ventana 7d) |
-| Eventos producidos | `trends.keyword.spike` (delta 7d > 30% O interest ≥ 80) · `competitor.ad.detected` (rama Google · Phase 2) |
+| Eventos producidos | `trends.keyword.spike` (delta 7d > 30% O interest ≥ 80) · `competitors.ad.detected` (rama Google · Build 2.2+) |
+| Notas Build 2.2 | Wrapper `argos/partners/serpapi/google_ads.py::search_google_ads_transparency()` busca lista bajo aliases `ad_creatives/ads/creatives/text_ads`. Output schema toleranta variaciones del engine SerpAPI · campos esperados por ad: `creative_id`, `advertiser_name`, `headline`, `creative_text`, `destination_url`, `first_shown`, `last_shown`, `format` (`TEXT_AD/IMAGE_AD/VIDEO_AD/RESPONSIVE_SEARCH_AD`) |
 | Fallback | pytrends como secundario (inestable, solo last resort) |
 | Dueño | ARGOS desde Build 1.3 |
 | Notas de implementación | `argos/partners/serpapi/client.py` · `enabled` indica configuración · `google_trends()` devuelve `{}` sin key (skip silencioso) · 401/429 → `SerpApiError`. Consumido por `agents/trends/service.py::TrendsAgent` |

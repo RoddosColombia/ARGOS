@@ -97,6 +97,23 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── watch_queries (Build 1.1) ───────────────────────────────────────────
+    created[col.WATCH_QUERIES] = await db[col.WATCH_QUERIES].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("query", ASCENDING)],
+            name="workspace_query_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("activa", ASCENDING)],
+            name="workspace_activa",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("source", ASCENDING)],
+            name="workspace_source",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

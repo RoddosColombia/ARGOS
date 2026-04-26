@@ -22,6 +22,23 @@ Primera fase funcional. Marketplace Agent consume MELI, Trends consume SerpAPI, 
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 1.1 · Haiku classifier + FB Marketplace + watch_queries en Mongo (2026-04-26)
+
+- **Watch queries migradas a colección Mongo `watch_queries`** (cierra DT-006). Schema `{workspace_id, query, source, activa, prioridad, created_at}` con 3 índices · seed idempotente con `$setOnInsert` (no rota ediciones manuales del CEO en restarts) · Scout lee queries activas en cada tick con override opcional para tests · endpoint `GET /api/v1/scout/watch-queries` (rol ceo). `WATCH_QUERIES` en código sobrevive como referencia + retrocompat de tests legacy.
+- **Classifier Haiku 4.5 binario relevante/no-relevante** entre fetch y persist. Modelo pinned `claude-haiku-4-5-20251001` (modelos_llm.md). System prompt ~3KB con 8 ejemplos few-shot · cubre match semántico fuerte, match por modelo de moto, casos no-relevante (otra categoría, repuesto carro, servicio no producto), y guía borderline ("preferir relevante=true en duda razonable"). Prompt caching activo via `cache_control: {"type": "ephemeral"}` en el bloque system.
+- **Cache local en el classifier** además del API cache. Key `(title.lower().strip(), description.lower().strip(), watch_query.lower().strip())` · evita llamada API completa cuando el mismo item se vuelve a clasificar dentro del proceso (típico cuando el Scout itera 11 queries × 20 items y muchos se repiten entre queries adyacentes). Test verifica `await_count == 1` tras dos llamadas idénticas.
+- **`NoOpClassifier` fallback cuando falta `ANTHROPIC_API_KEY`.** Decisión: degradar a "rechaza todo" (en vez de "acepta todo"). Razón: si no hay clasificador, mejor no contaminar `products_catalog` con todo el ruido de MELI · CEO ve catálogo vacío y eso fuerza configurar la key. Alternativa "acepta todo" lo dejaría descubrir el problema solo cuando Strategist diera recomendaciones malas.
+- **Errores de API del classifier degradan a relevante=False con razón `api_error_*`.** No tumba el tick. Captura excepciones de Anthropic genéricas (timeouts, 5xx, rate limits) sin diferenciar — el detalle vive en logs.
+- **JSON parse tolerante con strip de markdown fences** (` ```json ... ``` `). Haiku ocasionalmente envuelve JSON pese al prompt instructivo · regex `^```(?:json)?\s*|\s*```$` lo limpia antes de `json.loads`. Si parse falla → relevante=False con razón `parse_error`.
+- **Eventos `scout.product.discarded`** emitidos cuando classifier rechaza · payload `{source, source_id, title, watch_query, reason}`. Auditables en `argos_events` · base para el feedback loop futuro de DT-007.
+- **`upsert_product` (MELI) refactorizado a `parse_meli_item` + `persist_parsed_product`** (helper compartido). `persist_parsed_product` toma un dict ya parseado y hace dedup + history + eventos. Mantiene la firma pública `upsert_product(db, raw_meli)` para retrocompat de tests Build 1.0.
+- **`upsert_fb_product` espejo de `upsert_product` para FB Marketplace.** Parser `parse_apify_fb_item` extrae source_id desde la URL del listing (`/marketplace/item/(\d+)`) y precio desde string con símbolo (`"$ 50.000"` → `50000.0`) usando regex tolerante. Mismo `persist_parsed_product` · mismos índices · misma colección. Source `fb_marketplace` distinto de `meli` · no hay colisión por `(source, source_id)` unique.
+- **`ApifyClient` con skip silencioso sin token.** `enabled` property indica configuración · `fb_marketplace_search()` devuelve `[]` y loggea warning si no hay token, NO levanta. Permite que Scout llame al cliente sin verificar token explícito · tick funciona en dev sin Apify configurado y solo pega contra MELI. 401 y 429 SÍ propagan como `ApifyError` (errores genuinos, no config faltante).
+- **Actor Apify para FB Marketplace: `apify~facebook-marketplace-scraper`** (sintaxis URL-encoded del actor `apify/facebook-marketplace-scraper`). Endpoint `POST /v2/acts/{actor_id}/run-sync-get-dataset-items?token=...` · síncrono, devuelve dataset directo. Output schema asumido tolerante: `title`, `price` (string o number), `url`, `image`, `seller`, `condition`. El parser maneja campos faltantes.
+- **Scout tick() refactorizado** con queries desde Mongo + classifier inyectable + clientes MELI y Apify inyectables (testing). Stats nuevos: `products_discarded`, `classifier_cache_hits`. Errores aislados por (query, source): si MELI funciona pero Apify falla, MELI sigue procesándose y el error de Apify se registra en `stats.errors[].query = "{query}#fb"`.
+- **`ANTHROPIC_API_KEY` y `APIFY_API_TOKEN` en `.env.example` y `Settings`.** Sin ellos, Build 1.1 sigue funcionando degradado: classifier=NoOp y FB skip. Permite arrancar local sin gastar plata en APIs hasta que el CEO decida.
+- **DT-006 cerrada · DT-007 nueva (Haiku sin feedback loop).** DT-007 documenta que el classifier no se evalúa contra ground truth · resolverlo es Phase 4 cuando entre impact tracking. Mitigación actual: eventos `scout.product.discarded` quedan auditables en Mongo.
+
 ### Build 1.0 · MELI + Marketplace + Scout stub + APScheduler (2026-04-23)
 
 - **Sin SDK oficial de MELI · `httpx.AsyncClient` directo.** Los endpoints públicos (`/sites/MCO/search`, `/items/{id}`) responden bien sin OAuth. Evita una dep extra hasta que Build 1.5+ necesite datos privados de sellers. Wrapper `MeliClient` expone `search()` e `item()` con `asyncio.Semaphore(5)` para rate-limit self-imposed y `MeliError(status, msg)` para 404/429.
@@ -40,6 +57,11 @@ Primera fase funcional. Marketplace Agent consume MELI, Trends consume SerpAPI, 
 - **Tests: 20 nuevos (4 meli client mockeado + 8 marketplace service con Atlas real + 3 scout service + 4 scout API + 1 scheduler).** Total backend: 47 unit + 20 nuevos = 67 tests passing.
 
 ## Cambios en canónicas
+
+### Build 1.1
+- `docs/canonicas/colecciones_mongo.md` · sección nueva "Colección: watch_queries (Build 1.1)" con schema, índices y operación
+- `docs/canonicas/eventos.md` · evento nuevo `scout.product.discarded` con payload `{source, source_id, title, watch_query, reason}` · marketplace.product.detected source ahora documenta `meli/fb_marketplace` (renombrado desde `meli/fb_mp`)
+- `docs/canonicas/apis_externas.md` · sección Apify expandida con actor `apify~facebook-marketplace-scraper`, endpoint exacto `/v2/acts/.../run-sync-get-dataset-items`, schema input/output, sin SDK oficial, notas implementación
 
 ### Build 1.0
 - `docs/canonicas/apis_externas.md` · MercadoLibre section actualizada: sin SDK, httpx directo, auth público (sin OAuth), notas de implementación apuntando a `argos/partners/meli/client.py`

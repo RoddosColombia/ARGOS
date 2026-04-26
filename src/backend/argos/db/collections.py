@@ -25,5 +25,12 @@ ALL_BUILD_1_0: tuple[str, ...] = (
     PRODUCTS_HISTORY,
 )
 
+# ─── Build 1.1 ───────────────────────────────────────────────────────────
+WATCH_QUERIES = "watch_queries"
+
+ALL_BUILD_1_1: tuple[str, ...] = (
+    WATCH_QUERIES,
+)
+
 # Unión · útil para fixtures de teardown
-ALL_KNOWN: tuple[str, ...] = ALL_BUILD_0_3 + ALL_BUILD_1_0
+ALL_KNOWN: tuple[str, ...] = ALL_BUILD_0_3 + ALL_BUILD_1_0 + ALL_BUILD_1_1

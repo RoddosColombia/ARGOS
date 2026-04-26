@@ -108,6 +108,33 @@ async def publish_marketplace_product_detected(
     )
 
 
+async def publish_scout_product_discarded(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    source: str,
+    source_id: str,
+    title: str,
+    watch_query: str,
+    reason: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="scout.product.discarded",
+        workspace_id=workspace_id,
+        producer="scout",
+        payload={
+            "source": source,
+            "source_id": source_id,
+            "title": title[:200],
+            "watch_query": watch_query,
+            "reason": reason[:200],
+        },
+        correlation_id=correlation_id,
+    )
+
+
 async def publish_marketplace_price_changed(
     db: AsyncIOMotorDatabase,
     *,

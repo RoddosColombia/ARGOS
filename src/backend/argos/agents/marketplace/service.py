@@ -40,8 +40,12 @@ def _normalize_sku(source: str, source_id: str) -> str:
     return f"{source}:{source_id}"
 
 
-def _parse_meli_item(raw: dict[str, Any]) -> dict[str, Any] | None:
-    """Extrae campos relevantes de un item de la API MELI. Devuelve None si inválido."""
+def parse_meli_item(raw: dict[str, Any]) -> dict[str, Any] | None:
+    """Extrae campos relevantes de un item de la API MELI. Devuelve None si inválido.
+
+    Público (sin guion bajo) porque Scout lo usa para extraer título antes de
+    pasar el item al classifier · evita doble parseo cuando se descarta.
+    """
     item_id = raw.get("id")
     title = raw.get("title")
     price = raw.get("price")
@@ -73,11 +77,27 @@ async def upsert_product(
 
     Retorna `None` si el item MELI es inválido (sin id/title/price).
     """
-    parsed = _parse_meli_item(meli_item)
+    parsed = parse_meli_item(meli_item)
     if parsed is None:
         logger.warning("meli_item_invalid", extra={"raw_keys": list(meli_item.keys())})
         return None
+    return await persist_parsed_product(
+        db, parsed, workspace_id=workspace_id, emit_events=emit_events
+    )
 
+
+async def persist_parsed_product(
+    db: AsyncIOMotorDatabase,
+    parsed: dict[str, Any],
+    *,
+    workspace_id: str = "RODDOS",
+    emit_events: bool = True,
+) -> UpsertResult | None:
+    """Lógica compartida entre `upsert_product` (MELI) y `upsert_fb_product` (Apify).
+
+    `parsed` debe tener: source, source_id, nombre, precio_actual, stock_disponible,
+    seller_id, imagen_url, permalink, condition + opcionales (categoria_meli_id, etc.).
+    """
     sku_normalizado = _normalize_sku(parsed["source"], parsed["source_id"])
     compatible_motos = detect_compatible_motos(parsed["nombre"])
     now = datetime.now(tz=UTC)
@@ -92,15 +112,15 @@ async def upsert_product(
         "source": parsed["source"],
         "source_id": parsed["source_id"],
         "nombre": parsed["nombre"],
-        "categoria": "",  # Build 1.1 · Haiku categorizer llena esto
-        "categoria_meli_id": parsed["categoria_meli_id"],
+        "categoria": "",  # Build 1.1+ · futuro categorizer Haiku jerárquico llena esto
+        "categoria_meli_id": parsed.get("categoria_meli_id", ""),
         "compatible_motos": compatible_motos,
         "precio_actual": parsed["precio_actual"],
         "stock_disponible": parsed["stock_disponible"],
-        "seller_id": parsed["seller_id"],
-        "imagen_url": parsed["imagen_url"],
-        "permalink": parsed["permalink"],
-        "condition": parsed["condition"],
+        "seller_id": parsed.get("seller_id", ""),
+        "imagen_url": parsed.get("imagen_url", ""),
+        "permalink": parsed.get("permalink", ""),
+        "condition": parsed.get("condition", ""),
         "updated_at": now,
     }
 

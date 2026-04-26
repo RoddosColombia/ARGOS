@@ -339,6 +339,27 @@ Series temporales de precios y stock.
 
 Política: NUNCA UPDATE · NUNCA DELETE · solo INSERT
 
+## Colección: watch_queries (Build 1.1)
+
+Queries semilla que el Scout itera en cada tick (cada 6h en prod). Schema:
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | FK · ROG-A3 |
+| query | string | texto literal de búsqueda (ej. "aceite moto") |
+| source | enum | `meli` / `fb_marketplace` / `all` (Scout itera ambas) |
+| activa | bool | Scout solo procesa las activas |
+| prioridad | int | 1=baja, 5=alta · Scout ordena por prioridad desc |
+| created_at | datetime | |
+
+Índices: `(workspace_id, query)` **unique** · `(workspace_id, activa)` · `(workspace_id, source)`
+
+**Operación:**
+- Seed inicial inserta 11 queries por workspace nuevo con `$setOnInsert` (no sobrescribe ediciones del CEO)
+- Edición vía Mongo directo o endpoints futuros (Build 1.2+ añade PATCH/POST/DELETE)
+- Endpoint `GET /api/v1/scout/watch-queries` (rol ceo) lista todas (activas+inactivas) del workspace del usuario
+
 ## Colección: agent_memory (memoria de largo plazo por agente)
 
 | Campo | Tipo | Notas |

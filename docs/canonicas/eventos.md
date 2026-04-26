@@ -71,7 +71,9 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | marketplace.competitor.detected | competitors | strategist | {competitor_id, source, sku, precio} |
 | competitor.ad.detected | competitors | strategist | {competitor_id, platform: meta/google/tiktok, ad_id, copy, creative_url, durabilidad_dias} |
 | competitor.promo.detected | competitors | strategist, executive | {competitor_id, sku, descuento_pct, vigencia} |
-| trends.keyword.spiking | trends | strategist | {keyword, search_volume, growth_pct, vertical} |
+| trends.keyword.spiking | trends | strategist | {keyword, search_volume, growth_pct, vertical} · (legacy · ver `trends.keyword.spike` Build 1.3) |
+| trends.keyword.spike | trends_agent | strategist | {keyword, interest_over_time (0-100), delta_7d_pct} · emitido por TrendsAgent cuando delta 7d > 30% O interest >= 80 |
+| marketplace.price.alert | alerts_agent | strategist, executive (CEO dashboard) | {sku_normalizado, titulo, precio_anterior, precio_actual, delta_pct, fuente: meli/fb, competitor_url} · emitido cuando drop ≥ 15% en últimas 24h |
 | social.account.viral_detected | social | strategist | {account_id, platform: ig/tiktok, post_id, views, vertical} |
 | social.reel.viral | social | strategist | {post_id, platform, views, engagement_rate, related_skus} |
 

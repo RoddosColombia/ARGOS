@@ -193,13 +193,18 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Campo | Valor |
 |-------|-------|
 | Función | Google Trends + Google Search + Google Ads Transparency |
-| Estado | 5K queries/mes (~$50/mes) |
+| Estado | Producción parcial desde Build 1.3 (Google Trends · sin key configurada por default · skip silencioso) |
 | Criticidad | Media |
-| Auth | API Key |
-| Endpoints clave | `/search` (Google) · `/google_trends_*` (trends) · `/google_ads_transparency` |
-| Eventos producidos | trends.keyword.spiking, competitor.ad.detected (rama Google) |
+| Auth | API Key (`SERPAPI_API_KEY` env var) |
+| Tier | 5K queries/mes (~$50/mes) |
+| SDK | **Sin SDK oficial async** · `httpx.AsyncClient` directo sobre `/search.json` |
+| Endpoint Build 1.3 | `GET /search.json?engine=google_trends&q=KEYWORD&geo=CO&date=now+7-d&api_key=...` |
+| Endpoints futuros | `/search.json?engine=google` (Build 1.4+) · `/search.json?engine=google_ads_transparency` (Phase 2) |
+| Output `interest_over_time.timeline_data` | array de `{date, values: [{extracted_value: 0-100}]}` · TrendsAgent toma último valor + delta vs primero (ventana 7d) |
+| Eventos producidos | `trends.keyword.spike` (delta 7d > 30% O interest ≥ 80) · `competitor.ad.detected` (rama Google · Phase 2) |
 | Fallback | pytrends como secundario (inestable, solo last resort) |
-| Dueño | ARGOS Phase 1 (trends), Phase 2 (Google transparency) |
+| Dueño | ARGOS desde Build 1.3 |
+| Notas de implementación | `argos/partners/serpapi/client.py` · `enabled` indica configuración · `google_trends()` devuelve `{}` sin key (skip silencioso) · 401/429 → `SerpApiError`. Consumido por `agents/trends/service.py::TrendsAgent` |
 
 ## Anthropic API (Claude)
 

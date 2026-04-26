@@ -162,3 +162,60 @@ async def publish_marketplace_price_changed(
         },
         correlation_id=correlation_id,
     )
+
+
+# ─── Helpers Build 1.3 ───────────────────────────────────────────────────
+
+
+async def publish_trends_keyword_spike(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    keyword: str,
+    interest_over_time: int,
+    delta_7d_pct: float,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="trends.keyword.spike",
+        workspace_id=workspace_id,
+        producer="trends_agent",
+        payload={
+            "keyword": keyword,
+            "interest_over_time": interest_over_time,
+            "delta_7d_pct": delta_7d_pct,
+        },
+        correlation_id=correlation_id,
+    )
+
+
+async def publish_marketplace_price_alert(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    sku_normalizado: str,
+    titulo: str,
+    precio_anterior: float,
+    precio_actual: float,
+    delta_pct: float,
+    fuente: str,
+    competitor_url: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="marketplace.price.alert",
+        workspace_id=workspace_id,
+        producer="alerts_agent",
+        payload={
+            "sku_normalizado": sku_normalizado,
+            "titulo": titulo[:200],
+            "precio_anterior": precio_anterior,
+            "precio_actual": precio_actual,
+            "delta_pct": delta_pct,
+            "fuente": fuente,
+            "competitor_url": competitor_url,
+        },
+        correlation_id=correlation_id,
+    )

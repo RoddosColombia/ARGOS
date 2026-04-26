@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
+import { TrendsPage } from "@/pages/TrendsPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -23,6 +24,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <MarketplacePage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/trends",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <TrendsPage />
         </Layout>
       </ProtectedRoute>
     ),

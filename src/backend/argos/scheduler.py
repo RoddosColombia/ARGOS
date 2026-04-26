@@ -9,10 +9,13 @@ from __future__ import annotations
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from argos.agents.alerts.service import check_price_drops
 from argos.agents.scout.service import tick as scout_tick
+from argos.agents.trends.service import refresh_trends
 
 logger = logging.getLogger("argos.scheduler")
 
@@ -30,6 +33,22 @@ async def _scout_tick_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_scout_tick", extra=stats.as_dict())
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_scout_tick_failed")
+
+
+async def _trends_refresh_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await refresh_trends(db)
+        logger.info("scheduled_trends_refresh", extra=stats)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_trends_refresh_failed")
+
+
+async def _price_alert_check_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        alerts = await check_price_drops(db)
+        logger.info("scheduled_price_alert_check", extra={"alerts_emitted": len(alerts)})
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_price_alert_check_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -52,6 +71,31 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         max_instances=1,
         coalesce=True,
     )
+
+    # Trends agent · diario a las 03:00 UTC
+    scheduler.add_job(
+        _trends_refresh_job,
+        args=[db],
+        trigger=CronTrigger(hour=3, minute=0),
+        id="trends_refresh",
+        name="Trends refresh · Google Trends sobre watch_queries source=all",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Alerts · cada hora detecta caídas de precio ≥ 15% en últimas 24h
+    scheduler.add_job(
+        _price_alert_check_job,
+        args=[db],
+        trigger=IntervalTrigger(hours=1),
+        id="price_alert_check",
+        name="Price alert check · drops ≥ 15% en últimas 24h",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
     return scheduler
 
 

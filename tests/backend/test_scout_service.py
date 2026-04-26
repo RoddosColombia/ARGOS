@@ -1,3 +1,5 @@
+"""Tests del Scout service · adaptados a la signatura Build 1.1+ (queries de
+Mongo o `queries_override`, classifier inyectable, FB opcional)."""
 from __future__ import annotations
 
 import os
@@ -6,9 +8,11 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from argos.agents.classifier.service import ClassifyResult
 from argos.agents.scout.service import tick
 from argos.db import collections as col
 from argos.db.indexes import ensure_indexes
+from argos.partners.apify.client import ApifyClient
 from argos.partners.meli.client import MeliClient, MeliError
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
@@ -18,6 +22,11 @@ pytestmark = pytest.mark.skipif(
     not REAL_URI,
     reason="MONGODB_URI no disponible · integration tests saltados",
 )
+
+
+class _AcceptAllClassifier:
+    async def classify(self, _t: str, _d: str, _q: str) -> ClassifyResult:
+        return ClassifyResult(relevante=True, razon="ok", cached=False)
 
 
 class _FakeMeliClient(MeliClient):
@@ -35,11 +44,22 @@ class _FakeMeliClient(MeliClient):
     async def __aexit__(self, *_exc: object) -> None:
         return None
 
-    async def search(self, query: str, **kwargs: Any) -> list[dict[str, Any]]:  # type: ignore[override]
+    async def search(self, query: str, **_kwargs: Any) -> list[dict[str, Any]]:  # type: ignore[override]
         self.calls.append(query)
         if query in self._raise_on:
             raise MeliError(429, "Rate limited in fake")
         return list(self._responses.get(query, []))
+
+
+class _FakeApifyDisabled(ApifyClient):
+    def __init__(self):
+        super().__init__(api_token="")  # disabled
+
+    async def __aenter__(self) -> _FakeApifyDisabled:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        return None
 
 
 @pytest_asyncio.fixture
@@ -71,6 +91,11 @@ def _item(id_: str, title: str, price: float) -> dict[str, Any]:
     }
 
 
+def _q(query: str, source: str = "meli") -> dict[str, Any]:
+    """Helper · construye un watch_query doc para queries_override."""
+    return {"query": query, "source": source, "activa": True, "prioridad": 1}
+
+
 async def test_tick_procesa_queries_y_acumula_stats(indexed_db: AsyncIOMotorDatabase) -> None:
     fake = _FakeMeliClient(
         responses={
@@ -80,8 +105,10 @@ async def test_tick_procesa_queries_y_acumula_stats(indexed_db: AsyncIOMotorData
     )
     stats = await tick(
         indexed_db,
-        client=fake,
-        queries=("aceite moto", "filtro aire moto"),
+        meli_client=fake,
+        apify_client=_FakeApifyDisabled(),
+        classifier=_AcceptAllClassifier(),
+        queries_override=[_q("aceite moto"), _q("filtro aire moto")],
     )
 
     assert stats.queries_processed == 2
@@ -98,8 +125,10 @@ async def test_tick_aisla_error_en_una_query(indexed_db: AsyncIOMotorDatabase) -
     )
     stats = await tick(
         indexed_db,
-        client=fake,
-        queries=("aceite moto", "batería moto"),
+        meli_client=fake,
+        apify_client=_FakeApifyDisabled(),
+        classifier=_AcceptAllClassifier(),
+        queries_override=[_q("aceite moto"), _q("batería moto")],
     )
 
     assert stats.queries_processed == 1  # solo la exitosa
@@ -113,12 +142,24 @@ async def test_tick_detecta_price_change_en_segunda_pasada(indexed_db: AsyncIOMo
     fake_first = _FakeMeliClient(
         responses={"aceite moto": [_item("MCO-C1", "Aceite 20W50", 50000)]}
     )
-    await tick(indexed_db, client=fake_first, queries=("aceite moto",))
+    await tick(
+        indexed_db,
+        meli_client=fake_first,
+        apify_client=_FakeApifyDisabled(),
+        classifier=_AcceptAllClassifier(),
+        queries_override=[_q("aceite moto")],
+    )
 
     fake_second = _FakeMeliClient(
         responses={"aceite moto": [_item("MCO-C1", "Aceite 20W50", 60000)]}
     )
-    stats = await tick(indexed_db, client=fake_second, queries=("aceite moto",))
+    stats = await tick(
+        indexed_db,
+        meli_client=fake_second,
+        apify_client=_FakeApifyDisabled(),
+        classifier=_AcceptAllClassifier(),
+        queries_override=[_q("aceite moto")],
+    )
 
     assert stats.products_price_changed == 1
     count = await indexed_db[col.PRODUCTS_CATALOG].count_documents({"source_id": "MCO-C1"})

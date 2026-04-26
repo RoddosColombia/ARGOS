@@ -94,6 +94,79 @@ Build 0.5 v1 incluía `.github/workflows/deploy.yml` con fallback vía `RENDER_D
 
 ---
 
+## DT-007 · Classifier Haiku sin feedback loop · clasificaciones no evaluadas
+
+**Creada:** 2026-04-26 (Phase 1 / Build 1.1)
+**Prioridad:** media
+**Owner:** @CEO + @backend
+**Phase objetivo para resolver:** Phase 4+ (cuando llegue impact tracking en T+7)
+**Estado:** pendiente
+
+### Contexto
+
+Build 1.1 introduce `HaikuProductClassifier` que decide qué items de MELI/FB se persisten en `products_catalog` y cuáles se descartan (emiten `scout.product.discarded`). Las decisiones del classifier son binarias: relevante=True/False con razón en texto.
+
+**No hay mecanismo para evaluar la calidad de esas clasificaciones.** Si Haiku está descartando productos que sí eran relevantes, lo descubrimos solo mirando manualmente los eventos `scout.product.discarded` en MongoDB. No hay precision/recall medido, no hay sample re-clasificado, no hay alarma si la tasa de descartes diverge mucho de un baseline esperado.
+
+### Por qué se difirió
+
+- En Build 1.1 lo prioritario es ingerir datos reales filtrados (mejor que sin filtro). Tener feedback loop primero requeriría datos limpios, lo cual es circular.
+- El feedback loop natural es Phase 4 (impact tracking): si una recomendación sale del Strategist y pega o no pega contra ventas reales, el classifier que dejó pasar/bloqueó los productos relevantes recibe señal indirecta.
+- Antes de Phase 4, lo que hay es revisión manual del CEO sobre el catálogo · suficiente para sample.
+
+### Trade-off aceptado
+
+- Falsos negativos del classifier (productos relevantes marcados como no-relevantes) son invisibles en el flujo principal. Solo se descubren con auditoría manual de `scout.product.discarded`.
+- Falsos positivos (productos no relevantes marcados como relevantes) ensucian `products_catalog` pero el Strategist los puede filtrar downstream con sus propios criterios.
+- No hay versión-control del prompt del classifier · si se cambia el prompt, no hay forma de comparar antes/después contra un golden set.
+
+### Señales para re-evaluar
+
+- Phase 4 entra: ahí se construye el impact tracking y el feedback loop
+- Tasa de descartes > 80% sostenida por > 3 días (anómalo · probablemente prompt mal calibrado)
+- CEO reporta que "no llegan productos que esperaba ver" (señal cualitativa)
+- Cantidad de listings en `products_catalog` no crece linealmente con frecuencia de ticks
+
+### Mitigaciones activas
+
+- Eventos `scout.product.discarded` con `reason` quedan en `argos_events` · auditables manualmente
+- Cache local del classifier reduce llamadas Anthropic redundantes (~costo)
+- `NoOpClassifier` fallback cuando no hay `ANTHROPIC_API_KEY` · degrada a "guarda nada" en vez de "guarda todo sin filtro" · evita contaminación silenciosa del catálogo
+
+### Tags
+
+#classifier #haiku #ml #feedback-loop #scout
+
+---
+
+## DT-006 · ✅ RESUELTO · Watch queries hardcoded en código (Build 1.0)
+
+**Creada:** 2026-04-23 (Phase 1 / Build 1.0 · documentada retroactivamente como DT-006 por instrucción del CEO en Build 1.1)
+**Prioridad:** media
+**Owner:** @backend
+**Phase objetivo para resolver:** Build 1.1
+**Estado:** **resuelto en Build 1.1 (2026-04-26)**
+
+### Contexto
+
+Build 1.0 mantenía las 11 watch queries semilla del Scout como tupla constante en `argos/agents/scout/watch_queries.py`. Para activar/desactivar una query, ajustar prioridad, o agregar nuevas, se requería un PR + deploy.
+
+### Solución aplicada (Build 1.1)
+
+- Nueva colección Mongo `watch_queries` con schema `{workspace_id, query, source, activa, prioridad, created_at}` + índices `(workspace_id, query)` unique, `(workspace_id, activa)`, `(workspace_id, source)`
+- Seed idempotente inserta las 11 queries originales con `$setOnInsert` (no sobrescribe ediciones manuales del CEO)
+- Scout `tick()` ahora lee queries activas desde Mongo (con override opcional para tests)
+- Endpoint `GET /api/v1/scout/watch-queries` (rol ceo) para listar queries del workspace
+- Constante `WATCH_QUERIES` en código se mantiene como referencia documental + retrocompat para tests legacy
+
+Edición de queries (toggle, prioridad, agregar): Build 1.2+ añade endpoints `POST/PATCH/DELETE`. Hasta entonces, edición vía Mongo directo.
+
+### Tags
+
+#scout #watch-queries #mongo #resolved
+
+---
+
 ## DT-004 · APScheduler in-memory single-instance · no tolera escale horizontal
 
 **Creada:** 2026-04-23 (Phase 1 / Build 1.0)

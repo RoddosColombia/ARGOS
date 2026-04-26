@@ -161,14 +161,19 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Campo | Valor |
 |-------|-------|
 | Función | Scraping FB Marketplace + Meta Ad Library comercial + IG profiles |
-| Estado | Tier starter ($49/mes base) |
+| Estado | Producción parcial desde Build 1.1 (FB Marketplace · sin token configurado todavía · skip silencioso) |
 | Criticidad | Alta |
-| Auth | API Token |
-| Actors clave | `igolaizola/facebook-ad-library-scraper` · `apify/facebook-marketplace-scraper` |
-| Eventos producidos | marketplace.product.detected (rama FB MP), competitor.ad.detected |
-| Costo | Pay-per-use · proyectado $80-150/mes en operación normal |
-| Fallback | Si Apify cae: Scrapling propio con proxies residenciales como segunda línea |
-| Dueño | ARGOS Phase 2 |
+| Auth | API Token (`APIFY_API_TOKEN` env var) |
+| SDK | **Sin SDK oficial async** · `httpx.AsyncClient` directo sobre `/v2/acts/{actorId}/run-sync-get-dataset-items` |
+| Actor Build 1.1 | `apify~facebook-marketplace-scraper` (FB Marketplace search por país + max items) |
+| Actors futuros | `igolaizola/facebook-ad-library-scraper` (Build 2 · Meta Ad Library) · `apify/instagram-scraper` (Build 7 · social) |
+| Endpoint | `POST /v2/acts/apify~facebook-marketplace-scraper/run-sync-get-dataset-items?token=...` body `{"search": "...", "country": "co", "maxItems": 20}` |
+| Rate limit | Por plan · starter ~10 actors paralelos · respetar (ROG-A8) |
+| Eventos producidos | marketplace.product.detected (rama fb_marketplace), competitor.ad.detected (futuro), scout.product.discarded (cuando classifier rechaza) |
+| Costo | Pay-per-use · proyectado $80-150/mes en operación normal · Build 1.1 sin token = $0 |
+| Fallback | Si Apify cae: Scrapling propio con proxies residenciales como segunda línea (Build 2+) |
+| Dueño | ARGOS desde Build 1.1 |
+| Notas de implementación | `argos/partners/apify/client.py` · `ApifyClient(api_token).enabled` indica si está configurado · `fb_marketplace_search()` devuelve `[]` silenciosamente sin token (no levanta) · 401/429 → `ApifyError` · Scout aísla fallos por query |
 
 ## TikHub.io
 

@@ -65,8 +65,9 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 
 | event_type | Productor | Consumidores | Payload clave |
 |------------|-----------|--------------|---------------|
-| marketplace.product.detected | scout, marketplace_agent | strategist | {sku_normalizado, source: meli/fb_mp, source_id, nombre, categoria, precio_actual, created: bool} |
+| marketplace.product.detected | scout, marketplace_agent | strategist | {sku_normalizado, source: meli/fb_marketplace, source_id, nombre, categoria, precio_actual, created: bool} |
 | marketplace.price.changed | marketplace_agent | strategist, competitors | {sku_normalizado, source, source_id, price_before, price_after, delta_pct} · threshold ≥ 5% |
+| scout.product.discarded | scout (classifier Haiku) | strategist (futuro · feedback loop), audit_log | {source, source_id, title, watch_query, reason} · emitido cuando classifier marca relevante=False · permite auditoría de falsos negativos |
 | marketplace.competitor.detected | competitors | strategist | {competitor_id, source, sku, precio} |
 | competitor.ad.detected | competitors | strategist | {competitor_id, platform: meta/google/tiktok, ad_id, copy, creative_url, durabilidad_dias} |
 | competitor.promo.detected | competitors | strategist, executive | {competitor_id, sku, descuento_pct, vigencia} |

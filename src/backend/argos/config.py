@@ -35,6 +35,9 @@ class Settings(BaseSettings):
 
     disable_scheduler: bool = Field(default=False, alias="ARGOS_DISABLE_SCHEDULER")
 
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+    apify_api_token: str = Field(default="", alias="APIFY_API_TOKEN")
+
     @property
     def cors_origin_list(self) -> list[str]:
         if not self.cors_origins:

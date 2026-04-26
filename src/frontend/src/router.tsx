@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { MarketplacePage } from "@/pages/MarketplacePage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -12,6 +13,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <DashboardPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/marketplace",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <MarketplacePage />
         </Layout>
       </ProtectedRoute>
     ),

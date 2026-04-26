@@ -8,6 +8,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { label: "Marketplace", to: "/marketplace", phase: "Phase 1", enabled: true },
   { label: "Briefing", to: "/briefing", phase: "Phase 1", enabled: false },
   { label: "Scoring", to: "/scoring", phase: "Phase 2", enabled: false },
   { label: "WhatsApp", to: "/whatsapp", phase: "Phase 3", enabled: false },
@@ -50,18 +51,35 @@ export function Sidebar() {
             </NavLink>
           </li>
 
-          {NAV.map((item) => (
-            <li key={item.to}>
-              <div
-                className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-ink-500"
-                aria-disabled
-                title={`Disponible en ${item.phase}`}
-              >
-                <span>{item.label}</span>
-                <span className="text-xs text-ink-500/70">{item.phase}</span>
-              </div>
-            </li>
-          ))}
+          {NAV.map((item) =>
+            item.enabled ? (
+              <li key={item.to}>
+                <NavLink
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `block rounded-md px-3 py-2 text-sm ${
+                      isActive
+                        ? "bg-brand-50 font-medium text-brand-700"
+                        : "text-ink-700 hover:bg-ink-100"
+                    }`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              </li>
+            ) : (
+              <li key={item.to}>
+                <div
+                  className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-ink-500"
+                  aria-disabled
+                  title={`Disponible en ${item.phase}`}
+                >
+                  <span>{item.label}</span>
+                  <span className="text-xs text-ink-500/70">{item.phase}</span>
+                </div>
+              </li>
+            )
+          )}
         </ul>
       </nav>
     </aside>

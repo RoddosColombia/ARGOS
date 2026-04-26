@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from argos import __version__
 from argos.api.v1.health import router as health_router
+from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.scout import router as scout_router
 from argos.auth.router import router as auth_router
 from argos.auth.user_store import EnvUserStore, MongoUserStore, set_user_store
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(scout_router)
+    app.include_router(marketplace_router)
 
     return app
 

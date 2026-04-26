@@ -69,7 +69,8 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | marketplace.price.changed | marketplace_agent | strategist, competitors | {sku_normalizado, source, source_id, price_before, price_after, delta_pct} · threshold ≥ 5% |
 | scout.product.discarded | scout (classifier Haiku) | strategist (futuro · feedback loop), audit_log | {source, source_id, title, watch_query, reason} · emitido cuando classifier marca relevante=False · permite auditoría de falsos negativos |
 | marketplace.competitor.detected | competitors | strategist | {competitor_id, source, sku, precio} |
-| competitor.ad.detected | competitors | strategist | {competitor_id, platform: meta/google/tiktok, ad_id, copy, creative_url, durabilidad_dias} |
+| competitor.ad.detected | competitors | strategist | {competitor_id, platform: meta/google/tiktok, ad_id, copy, creative_url, durabilidad_dias} · (legacy · ver `competitors.ad.detected` Build 2.1) |
+| competitors.ad.detected | competitors_agent | strategist, executive | {plataforma, ad_id_externo, anunciante, copy_titulo, fuente_query, durabilidad_dias, formato} · emitido SOLO en primera detección del ad (re-detecciones en mismo upsert no spamean el bus) |
 | competitor.promo.detected | competitors | strategist, executive | {competitor_id, sku, descuento_pct, vigencia} |
 | trends.keyword.spiking | trends | strategist | {keyword, search_volume, growth_pct, vertical} · (legacy · ver `trends.keyword.spike` Build 1.3) |
 | trends.keyword.spike | trends_agent | strategist | {keyword, interest_over_time (0-100), delta_7d_pct} · emitido por TrendsAgent cuando delta 7d > 30% O interest >= 80 |

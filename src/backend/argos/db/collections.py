@@ -39,7 +39,14 @@ ALL_BUILD_1_3: tuple[str, ...] = (
     KEYWORDS,
 )
 
+# ─── Build 2.1 ───────────────────────────────────────────────────────────
+ADS_LIBRARY = "ads_library"
+
+ALL_BUILD_2_1: tuple[str, ...] = (
+    ADS_LIBRARY,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
-    ALL_BUILD_0_3 + ALL_BUILD_1_0 + ALL_BUILD_1_1 + ALL_BUILD_1_3
+    ALL_BUILD_0_3 + ALL_BUILD_1_0 + ALL_BUILD_1_1 + ALL_BUILD_1_3 + ALL_BUILD_2_1
 )

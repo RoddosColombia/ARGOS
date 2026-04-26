@@ -214,6 +214,10 @@ class _Signals:
     spike_keywords: list[dict[str, Any]] = field(default_factory=list)
     new_ads: list[dict[str, Any]] = field(default_factory=list)
     new_social_accounts: list[dict[str, Any]] = field(default_factory=list)
+    # Build 3.2: enriquecimiento semántico desde Qdrant · si MemoryAgent está
+    # disponible, contiene productos y ads similares a las señales detectadas.
+    related_products: list[dict[str, Any]] = field(default_factory=list)
+    related_ads: list[dict[str, Any]] = field(default_factory=list)
 
     def to_user_payload(self) -> dict[str, Any]:
         return {
@@ -223,11 +227,17 @@ class _Signals:
             "spike_keywords": self.spike_keywords,
             "new_ads": self.new_ads,
             "new_social_accounts": self.new_social_accounts,
+            "related_products": self.related_products,
+            "related_ads": self.related_ads,
         }
 
 
 async def gather_signals(
-    db: AsyncIOMotorDatabase, workspace_id: str, *, lookback_hours: int = 24
+    db: AsyncIOMotorDatabase,
+    workspace_id: str,
+    *,
+    lookback_hours: int = 24,
+    memory_agent: Any | None = None,
 ) -> _Signals:
     """Recolecta señales de las últimas `lookback_hours` para alimentar al Strategist."""
     cutoff = datetime.now(tz=UTC) - timedelta(hours=lookback_hours)
@@ -283,6 +293,13 @@ async def gather_signals(
     ).sort("relevancia_score", -1).limit(10)
     s.new_social_accounts = await cursor.to_list(length=10)
 
+    # Build 3.2 · enriquecimiento semántico via Qdrant si MemoryAgent disponible
+    if memory_agent is not None:
+        try:
+            await _enrich_with_memory(s, memory_agent, workspace_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("strategist_memory_enrich_failed")
+
     logger.info(
         "strategist_signals_gathered",
         extra={
@@ -292,9 +309,71 @@ async def gather_signals(
             "spike_keywords": len(s.spike_keywords),
             "new_ads": len(s.new_ads),
             "new_social_accounts": len(s.new_social_accounts),
+            "related_products": len(s.related_products),
+            "related_ads": len(s.related_ads),
         },
     )
     return s
+
+
+async def _enrich_with_memory(s: _Signals, memory_agent: Any, workspace_id: str) -> None:
+    """Para cada price_change y new_ad, busca top-3 items semánticamente similares.
+
+    Útil cuando el Strategist necesita "qué otros productos del catálogo
+    son comparables al que cambió de precio?" · "qué ads previos son parecidos
+    al nuevo de la competencia?". Limita a top 2 señales para no inflar el
+    contexto del LLM ni gastar embeddings en queries redundantes.
+    """
+    if not getattr(memory_agent, "enabled", False):
+        return
+
+    # Hasta 2 productos con price change reciente · top 3 similares cada uno
+    seen_skus: set[str] = set()
+    for change in s.price_changes[:2]:
+        sku = change.get("sku_normalizado", "")
+        if not sku or sku in seen_skus:
+            continue
+        seen_skus.add(sku)
+        nombre = change.get("nombre") or sku
+        hits = await memory_agent.search_similar_products(
+            nombre, limit=3, workspace_id=workspace_id
+        )
+        for h in hits:
+            payload = h.payload if hasattr(h, "payload") else h.get("payload") or {}
+            score = h.score if hasattr(h, "score") else h.get("score") or 0
+            s.related_products.append(
+                {
+                    "trigger_sku": sku,
+                    "score": round(float(score), 4),
+                    "sku_normalizado": payload.get("sku_normalizado", ""),
+                    "nombre": payload.get("nombre", ""),
+                    "source": payload.get("source", ""),
+                }
+            )
+
+    # Hasta 2 ads nuevos · top 3 ads históricos similares cada uno
+    seen_ad_ids: set[str] = set()
+    for ad in s.new_ads[:2]:
+        ad_titulo = ad.get("copy_titulo") or ad.get("anunciante", "")
+        ad_key = ad.get("anunciante", "") + "|" + ad_titulo
+        if ad_key in seen_ad_ids or not ad_titulo:
+            continue
+        seen_ad_ids.add(ad_key)
+        hits = await memory_agent.search_similar_ads(
+            ad_titulo, limit=3, workspace_id=workspace_id
+        )
+        for h in hits:
+            payload = h.payload if hasattr(h, "payload") else h.get("payload") or {}
+            score = h.score if hasattr(h, "score") else h.get("score") or 0
+            s.related_ads.append(
+                {
+                    "trigger_titulo": ad_titulo[:80],
+                    "score": round(float(score), 4),
+                    "anunciante": payload.get("anunciante", ""),
+                    "copy_titulo": payload.get("copy_titulo", ""),
+                    "plataforma": payload.get("plataforma", ""),
+                }
+            )
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -377,10 +456,15 @@ class StrategistAgent:
         workspace_id: str,
         *,
         signals: _Signals | None = None,
+        memory_agent: Any | None = None,
     ) -> MorningBriefing:
-        """Recolecta signals (o usa override), llama Claude, parsea, devuelve briefing."""
+        """Recolecta signals (o usa override), llama Claude, parsea, devuelve briefing.
+
+        Si `memory_agent` se pasa (y está enabled), `gather_signals` enriquece
+        con productos/ads semánticamente relacionados · Build 3.2.
+        """
         if signals is None:
-            signals = await gather_signals(db, workspace_id)
+            signals = await gather_signals(db, workspace_id, memory_agent=memory_agent)
 
         fecha = datetime.now(tz=UTC).strftime("%Y-%m-%d")
         user_message = (

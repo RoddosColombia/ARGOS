@@ -216,6 +216,40 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Dueño | ARGOS desde Build 1.3 |
 | Notas de implementación | `argos/partners/serpapi/client.py` · `enabled` indica configuración · `google_trends()` devuelve `{}` sin key (skip silencioso) · 401/429 → `SerpApiError`. Consumido por `agents/trends/service.py::TrendsAgent` |
 
+## OpenAI (Build 3.2 · embeddings)
+
+| Campo | Valor |
+|-------|-------|
+| Función | Generación de embeddings para vector search · text-embedding-3-small (1536 dim) |
+| Estado | Producción parcial desde Build 3.2 (sin key configurada · MemoryAgent skip silencioso) |
+| Criticidad | Media (degradación: el Strategist pierde enriquecimiento semántico pero sigue funcional) |
+| Auth | API Key (`OPENAI_API_KEY` env var) |
+| SDK | `openai>=1.50,<2.0` async · `AsyncOpenAI(api_key=...).embeddings.create(model=..., input=[...])` |
+| Modelo Build 3.2 | `text-embedding-3-small` · 1536 dim · ~$0.02 por 1M tokens · soporta batch |
+| Modelos futuros | Whisper (audio en WhatsApp Agent · Build 3.6) · GPT-4 vision como fallback de Sonnet (no planeado) |
+| Eventos producidos | N/A (es runtime helper · no emite eventos) |
+| Costo proyectado | <$10/mes en Build 3.2 (~5K productos × 1 embed + 1K ads × 1 embed = ~6M tokens iniciales · luego solo deltas) |
+| Fallback | Sin key → `OpenAIEmbedder.enabled=False` · `embed()` devuelve `[]` · jobs no-op · search devuelve [] |
+| Notas | Build 3.2 NO usa Voyage AI (`voyage-3` es 1024 dim · incompatible con colección 1536) · `VOYAGE_API_KEY` env reservada para futuro multi-provider con colecciones Qdrant separadas por dim |
+| Dueño | ARGOS desde Build 3.2 |
+
+## Qdrant (Build 3.2 · vector DB self-hosted)
+
+| Campo | Valor |
+|-------|-------|
+| Función | Vector database para búsqueda semántica · GraphRAG del Strategist |
+| Estado | Producción parcial desde Build 3.2 · self-hosted en Render (sin URL configurada · MemoryAgent skip silencioso) |
+| Criticidad | Media (degradación: Strategist pierde enriquecimiento semántico) |
+| Auth | URL + API Key opcional (`QDRANT_URL` + `QDRANT_API_KEY` env vars) |
+| SDK | `qdrant-client>=1.10,<2.0` · `AsyncQdrantClient(url=..., api_key=...)` |
+| Colecciones Build 3.2 | `products_embeddings` y `ads_embeddings` · ambas dim=1536 distance=COSINE |
+| Operaciones usadas | `create_collection` (idempotente) · `upsert(PointStruct)` · `query_points` con filter por workspace_id |
+| Filtro multi-tenant | Cada `search` aplica `Filter(must=[FieldCondition(key="workspace_id", match=MatchValue(value=...))])` (ROG-A3) |
+| Costo proyectado | $0/mes (self-hosted gratis en Render · usa Persistent Disk) |
+| Fallback | Sin URL → operations son no-op · search devuelve [] sin levantar |
+| Notas | `argos/partners/qdrant/client.py::QdrantBackend` envuelve el cliente async con skip silencioso · `ensure_collections()` se llama en cada job para garantizar idempotencia · sin migraciones si dim/distance no cambian |
+| Dueño | ARGOS desde Build 3.2 |
+
 ## Anthropic API (Claude)
 
 | Campo | Valor |

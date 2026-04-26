@@ -195,21 +195,29 @@ Series temporales de precios y stock.
 
 ## Colección: ads_library
 
+Schema **canónico Build 2.1** · ads detectados en Meta Ad Library (futuro: Google Transparency, TikTok).
+
 | Campo | Tipo | Notas |
 |-------|------|-------|
 | _id | ObjectId | |
-| workspace_id | string | |
-| competitor_id | string | |
-| platform | enum | meta/google/tiktok |
-| ad_id_externo | string | |
-| copy_text | string | |
-| creative_url | string | url al asset descargado en Persistent Disk |
-| creative_local_path | string | path en disk |
-| primera_deteccion | datetime | |
-| ultima_deteccion | datetime | |
-| durabilidad_dias | int | calculated |
-| activo_actualmente | bool | |
-| sku_referenciado | string | si se identificó |
+| workspace_id | string | FK · ROG-A3 |
+| plataforma | enum | `meta` / `google` / `tiktok` |
+| ad_id_externo | string | ID del ad en la plataforma · ej. `ad_archive_id` de FB Ad Library |
+| anunciante | string | Nombre de la página/marca (≤200 chars) |
+| copy_texto | string | Copy completo del ad (≤2000 chars) |
+| copy_titulo | string | Título / headline (≤300 chars) |
+| url_landing | string | Destino del CTA · permalink al landing del anunciante |
+| fecha_inicio | datetime | `ad_delivery_start_time` parsed |
+| fecha_fin | datetime nullable | `ad_delivery_stop_time` · null si activo |
+| durabilidad_dias | int | calculado · `(fecha_fin or now) - fecha_inicio` |
+| formato | enum | `image` / `video` / `carousel` / `unknown` |
+| activo | bool | True si `fecha_fin` es null |
+| fuente_query | string | watch_query que disparó el scrape |
+| primera_deteccion | datetime | timestamp de upsert inicial · `$setOnInsert` |
+| ultima_deteccion | datetime | timestamp del último scrape donde aparece |
+| created_at, updated_at | datetime | |
+| competitor_id | string | (futuro · cuando se cree colección `competitors`) |
+| sku_referenciado | string | (futuro · si Strategist lo asocia) |
 | estimado_spend | float | si SerpAPI lo da |
 
 Índices: (workspace_id, platform, ad_id_externo) unique · (workspace_id, competitor_id) · (workspace_id, activo_actualmente)

@@ -219,3 +219,37 @@ async def publish_marketplace_price_alert(
         },
         correlation_id=correlation_id,
     )
+
+
+# ─── Helpers Build 2.1 ───────────────────────────────────────────────────
+
+
+async def publish_competitors_ad_detected(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    plataforma: str,
+    ad_id_externo: str,
+    anunciante: str,
+    copy_titulo: str,
+    fuente_query: str,
+    durabilidad_dias: int,
+    formato: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="competitors.ad.detected",
+        workspace_id=workspace_id,
+        producer="competitors_agent",
+        payload={
+            "plataforma": plataforma,
+            "ad_id_externo": ad_id_externo,
+            "anunciante": anunciante[:200],
+            "copy_titulo": copy_titulo[:200],
+            "fuente_query": fuente_query,
+            "durabilidad_dias": durabilidad_dias,
+            "formato": formato,
+        },
+        correlation_id=correlation_id,
+    )

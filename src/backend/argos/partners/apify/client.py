@@ -21,6 +21,7 @@ logger = logging.getLogger("argos.partners.apify")
 APIFY_BASE_URL = "https://api.apify.com"
 DEFAULT_TIMEOUT_SECONDS = 60.0  # Apify run-sync puede tardar
 DEFAULT_FB_ACTOR_ID = "apify~facebook-marketplace-scraper"
+DEFAULT_FB_AD_LIBRARY_ACTOR_ID = "apify~facebook-ad-library-scraper"
 DEFAULT_COUNTRY = "co"
 
 
@@ -107,5 +108,49 @@ class ApifyClient:
         data = resp.json()
         if not isinstance(data, list):
             logger.warning("apify_unexpected_response_shape", extra={"shape": type(data).__name__})
+            return []
+        return data
+
+    async def fb_ad_library_search(
+        self,
+        query: str,
+        *,
+        country: str = DEFAULT_COUNTRY,
+        max_items: int = 50,
+        actor_id: str = DEFAULT_FB_AD_LIBRARY_ACTOR_ID,
+    ) -> list[dict[str, Any]]:
+        """Corre el actor FB Ad Library para una keyword · devuelve dataset items.
+
+        Skip silencioso sin token. Mismo manejo de errores que fb_marketplace_search.
+        """
+        if not self.enabled or self._client is None:
+            logger.warning("apify_ad_library_skipped_no_token", extra={"query": query})
+            return []
+
+        actor_input = {
+            "searchTerms": [query],
+            "country": country.upper(),
+            "maxItems": max_items,
+            "adType": "all",
+        }
+        try:
+            resp = await self._client.post(
+                f"/v2/acts/{actor_id}/run-sync-get-dataset-items",
+                params={"token": self._api_token},
+                json=actor_input,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("apify_ad_library_http_error", extra={"query": query, "error": str(exc)[:200]})
+            raise ApifyError(0, f"http_error: {type(exc).__name__}") from exc
+
+        if resp.status_code == 401:
+            raise ApifyError(401, "Apify token inválido")
+        if resp.status_code == 429:
+            raise ApifyError(429, "Apify rate limited")
+        if resp.status_code >= 400:
+            raise ApifyError(resp.status_code, resp.text[:200])
+
+        data = resp.json()
+        if not isinstance(data, list):
             return []
         return data

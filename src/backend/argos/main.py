@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from argos import __version__
 from argos.api.v1.alerts import router as alerts_router
+from argos.api.v1.competitors import router as competitors_router
 from argos.api.v1.health import router as health_router
 from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.scout import router as scout_router
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(marketplace_router)
     app.include_router(alerts_router)
     app.include_router(trends_router)
+    app.include_router(competitors_router)
 
     return app
 

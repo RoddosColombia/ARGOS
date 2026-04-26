@@ -14,6 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from argos.agents.alerts.service import check_price_drops
+from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.scout.service import tick as scout_tick
 from argos.agents.trends.service import refresh_trends
 
@@ -49,6 +50,14 @@ async def _price_alert_check_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_price_alert_check", extra={"alerts_emitted": len(alerts)})
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_price_alert_check_failed")
+
+
+async def _meta_ads_refresh_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await refresh_meta_ads(db)
+        logger.info("scheduled_meta_ads_refresh", extra=stats.as_dict())
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_meta_ads_refresh_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -91,6 +100,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=1),
         id="price_alert_check",
         name="Price alert check · drops ≥ 15% en últimas 24h",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Meta Ad Library · cada 12h scraping competidores activos
+    scheduler.add_job(
+        _meta_ads_refresh_job,
+        args=[db],
+        trigger=IntervalTrigger(hours=12),
+        id="meta_ads_refresh",
+        name="Meta Ads refresh · Apify FB Ad Library scraper",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

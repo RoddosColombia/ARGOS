@@ -131,6 +131,27 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── ads_library (Build 2.1 · Competitors Meta Ad Library) ───────────────
+    created[col.ADS_LIBRARY] = await db[col.ADS_LIBRARY].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("plataforma", ASCENDING), ("ad_id_externo", ASCENDING)],
+            name="workspace_plataforma_ad_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("anunciante", ASCENDING)],
+            name="workspace_anunciante",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("activo", ASCENDING)],
+            name="workspace_activo",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("fecha_inicio", DESCENDING)],
+            name="workspace_fecha_inicio_desc",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

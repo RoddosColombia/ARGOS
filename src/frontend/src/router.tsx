@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { CompetitorsPage } from "@/pages/CompetitorsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
@@ -34,6 +35,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <TrendsPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/competitors",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <CompetitorsPage />
         </Layout>
       </ProtectedRoute>
     ),

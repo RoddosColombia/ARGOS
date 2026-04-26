@@ -161,15 +161,16 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Campo | Valor |
 |-------|-------|
 | Función | Scraping FB Marketplace + Meta Ad Library comercial + IG profiles |
-| Estado | Producción parcial desde Build 1.1 (FB Marketplace · sin token configurado todavía · skip silencioso) |
+| Estado | Producción parcial desde Build 1.1 (FB Marketplace) y Build 2.1 (FB Ad Library) · sin token configurado todavía · skip silencioso |
 | Criticidad | Alta |
 | Auth | API Token (`APIFY_API_TOKEN` env var) |
 | SDK | **Sin SDK oficial async** · `httpx.AsyncClient` directo sobre `/v2/acts/{actorId}/run-sync-get-dataset-items` |
 | Actor Build 1.1 | `apify~facebook-marketplace-scraper` (FB Marketplace search por país + max items) |
-| Actors futuros | `igolaizola/facebook-ad-library-scraper` (Build 2 · Meta Ad Library) · `apify/instagram-scraper` (Build 7 · social) |
-| Endpoint | `POST /v2/acts/apify~facebook-marketplace-scraper/run-sync-get-dataset-items?token=...` body `{"search": "...", "country": "co", "maxItems": 20}` |
+| Actor Build 2.1 | `apify~facebook-ad-library-scraper` (Meta Ad Library · input `{searchTerms: [...], country: "CO", maxItems, adType: "all"}`) |
+| Actors futuros | `apify/instagram-scraper` (Build 7 · social) |
+| Endpoint genérico | `POST /v2/acts/{actor_id}/run-sync-get-dataset-items?token=...` body = actor_input |
 | Rate limit | Por plan · starter ~10 actors paralelos · respetar (ROG-A8) |
-| Eventos producidos | marketplace.product.detected (rama fb_marketplace), competitor.ad.detected (futuro), scout.product.discarded (cuando classifier rechaza) |
+| Eventos producidos | marketplace.product.detected (rama fb_marketplace) · competitors.ad.detected (Build 2.1) · scout.product.discarded (cuando classifier rechaza) |
 | Costo | Pay-per-use · proyectado $80-150/mes en operación normal · Build 1.1 sin token = $0 |
 | Fallback | Si Apify cae: Scrapling propio con proxies residenciales como segunda línea (Build 2+) |
 | Dueño | ARGOS desde Build 1.1 |

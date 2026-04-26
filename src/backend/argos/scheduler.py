@@ -14,6 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from argos.agents.alerts.service import check_price_drops
+from argos.agents.competitors.google_ads_service import refresh_google_ads
 from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.scout.service import tick as scout_tick
 from argos.agents.trends.service import refresh_trends
@@ -58,6 +59,14 @@ async def _meta_ads_refresh_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_meta_ads_refresh", extra=stats.as_dict())
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_meta_ads_refresh_failed")
+
+
+async def _google_ads_refresh_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await refresh_google_ads(db)
+        logger.info("scheduled_google_ads_refresh", extra=stats.as_dict())
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_google_ads_refresh_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -112,6 +121,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=12),
         id="meta_ads_refresh",
         name="Meta Ads refresh · Apify FB Ad Library scraper",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Google Ads Transparency · cada 12h via SerpAPI
+    scheduler.add_job(
+        _google_ads_refresh_job,
+        args=[db],
+        trigger=IntervalTrigger(hours=12),
+        id="google_ads_refresh",
+        name="Google Ads refresh · SerpAPI google_ads_transparency_center",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

@@ -13,7 +13,7 @@ Inteligencia competitiva profunda (Meta Ad Library, Google Transparency, social 
 ## Builds incluidos
 
 - **Build 2.1 — Meta Ad Library scraping (Apify) + vista /competitors** ✅
-- Build 2.2 — Google Ads Transparency via SerpAPI (futuro)
+- **Build 2.2 — Google Ads Transparency via SerpAPI** ✅
 - Build 2.3 — TikHub social listening (movido a Phase 7)
 - Build 2.4 — Score Engine clon · skeleton + endpoints
 - Build 2.5 — RiskSeal integration en Score Engine
@@ -21,6 +21,22 @@ Inteligencia competitiva profunda (Meta Ad Library, Google Transparency, social 
 - Build 2.7 — Score Engine Claude Sonnet Capa 2
 
 ## Decisiones arquitectónicas tomadas
+
+### Build 2.2 · Google Ads Transparency (SerpAPI) (2026-04-26)
+
+- **Reuso de `SerpApiClient` (Build 1.3)** con dos métodos: `google_trends()` ya existente + `google_ads_transparency()` nuevo. Refactor del cliente: extraje `_search_json()` privado que centraliza GET `/search.json` + manejo de `SerpApiError(401/429)` · ambos métodos públicos lo invocan con sus params específicos. Más DRY que copiar try/except por endpoint.
+- **Engine SerpAPI: `google_ads_transparency_center`** (no `google_ads_transparency` a secas como decía el spec original). Verificado en docs SerpAPI · ese es el engine name correcto a abril 2026. Documentado en `apis_externas.md`.
+- **`argos/partners/serpapi/google_ads.py` como módulo separado** con `search_google_ads_transparency(keyword, *, client)` · cumple el spec del CEO + separa el contrato HTTP (cliente) del manejo de shape de respuesta (este módulo busca `ad_creatives` bajo varios aliases conocidos: `ad_creatives` / `ads` / `creatives` / `text_ads`). Si SerpAPI cambia el shape, parche localizado aquí.
+- **`activo` para Google Ads usa heurística de "last_shown reciente"**: si `last_shown` es null → activo · si fue hace <7 días → activo (Google Transparency reporta con lag) · si >7 días → pausado. Mientras Meta Ad Library da binario (stop_time null/no-null), Google es más fuzzy. La ventana de 7 días es ajustable como constante si genera falsos positivos.
+- **`keywords_pautadas: list[str]`** acumulativo via `$addToSet` (semántica set, no append-duplicates). Conflicto Mongo 40 si se intenta combinar `$setOnInsert.keywords_pautadas: [query]` + `$addToSet: query` (mismo path) · solución: solo `$addToSet`. En insert, Mongo crea el array con el primer elemento; en update, agrega únicos. Documentado en el código + ER nuevo abajo.
+- **Sin endpoint OAuth para targeting real.** La transparency center API expone _qué_ ad corre pero NO _qué keywords_ targeteó (eso requeriría Google Ads API con OAuth de la cuenta del anunciante, no factible). `keywords_pautadas` registra entonces "qué watch_query nuestra detectó este ad" — útil para análisis ("qué queries son las que más nos exponen ads de competencia") pero no es el targeting real del competidor. DT futura cuando aparezca un endpoint con esa info.
+- **`upsert_google_ad` espejo de `upsert_meta_ad`** en estructura (mismo patrón set / setOnInsert / addToSet · misma emisión de evento solo en create). Diferencias: source `google` en vez de `meta`, regex de formato distinta (`TEXT_AD/IMAGE_AD/VIDEO_AD/RESPONSIVE_SEARCH_AD` vs `IMAGE/VIDEO/CAROUSEL`). Ambos services comparten `parse_competitors_ad` design via duplicación corta — refactorizar a `_common.py` cuando llegue Build 2.3 (TikTok ads · si llega).
+- **Endpoint `GET /api/v1/competitors/ads` extiende default**: de `source="meta"` (Build 2.1) a `source="all"` (Build 2.2). Razón: ahora hay dos sources reales · default `all` muestra panorama completo · CEO filtra explícitamente cuando quiere uno solo. Breaking pequeño en API · sin clientes externos todavía, aceptable.
+- **`keywords_pautadas` en response del endpoint** · nuevo campo en payload JSON. Frontend tipo extendido. Útil para que el dashboard muestre futuro "este ad apareció en N queries · ranking de relevancia".
+- **Vista `/competitors` extendida con dropdown de fuente** (Todos / Meta / Google) + columna nueva "Plataforma" con badge de color: Meta=azul, Google=emerald, TikTok=rosa (futuro). Decisión cromática: Meta queda en blue (color de marca de FB), Google en emerald (color GBoogle Ads suele usarse verde). Diferencias visibles a primera vista para el CEO.
+- **Job scheduler `google_ads_refresh` cada 12h**, mismo intervalo que Meta. SerpAPI tier es 5K queries/mes; con 11 watch queries × 2 corridas/día = 660 queries/mes, cabe holgado. Si en Phase 2.3+ los watch_queries crecen a 30+, recalibrar.
+- **Sin endpoint para listar `keywords_pautadas` aggregadas** (ej. "top 10 queries que más ads competitivos detectan"). Útil pero no crítico para Build 2.2 · diferir a Build 2.3+ si CEO lo pide.
+
 
 ### Build 2.1 · Meta Ad Library (Apify) + vista /competitors (2026-04-26)
 
@@ -40,6 +56,10 @@ Inteligencia competitiva profunda (Meta Ad Library, Google Transparency, social 
 
 ## Cambios en canónicas
 
+### Build 2.2
+- `docs/canonicas/apis_externas.md` · sección SerpAPI expandida con engine `google_ads_transparency_center` (Build 2.2) + nota sobre el módulo wrapper `argos/partners/serpapi/google_ads.py`
+- `docs/canonicas/colecciones_mongo.md` · `ads_library` agrega campo `keywords_pautadas: list[str]` (nuevo en Build 2.2 · Google Ads · array set acumulativo via `$addToSet`)
+
 ### Build 2.1
 - `docs/canonicas/colecciones_mongo.md` · sección `ads_library` reescrita al schema Build 2.1 (renombres + campos nuevos + nota sobre legacy)
 - `docs/canonicas/eventos.md` · evento nuevo `competitors.ad.detected` (legacy `competitor.ad.detected` queda marcado como tal)
@@ -50,6 +70,7 @@ Inteligencia competitiva profunda (Meta Ad Library, Google Transparency, social 
 | Error | Causa raíz | Solución | Prevención futura |
 | --- | --- | --- | --- |
 | Test frontend `getByText(/activo/i)` matcheaba múltiples elementos | El header de columna "Días activo" colisiona con el badge "🟢 activo" cuando se busca con regex insensitive | Match exacto al emoji+texto del badge: `getByText(/🟢 activo/)` | Para badges con texto común, incluir el emoji o data-testid en el selector · NUNCA usar regex permisivo en headers de tabla |
+| `pymongo.errors.WriteError code 40` "Updating the path 'keywords_pautadas' would create a conflict at 'keywords_pautadas'" | Combinar `$setOnInsert.keywords_pautadas: [query]` + `$addToSet.keywords_pautadas: query` en la misma update · MongoDB rechaza dos operadores tocando el mismo path | Eliminar `keywords_pautadas` del `$setOnInsert` · `$addToSet` se encarga solo: crea el array si no existe, agrega únicos en re-detection | Cuando se quiera "init en insert + accumulate en update" sobre un array, usar **solo** `$addToSet`. `$push`/`$addToSet` ya manejan el caso de array inexistente. Documentado inline + ER aquí. |
 
 ## Deuda técnica generada
 

@@ -211,8 +211,9 @@ Schema **canónico Build 2.1** · ads detectados en Meta Ad Library (futuro: Goo
 | fecha_fin | datetime nullable | `ad_delivery_stop_time` · null si activo |
 | durabilidad_dias | int | calculado · `(fecha_fin or now) - fecha_inicio` |
 | formato | enum | `image` / `video` / `carousel` / `unknown` |
-| activo | bool | True si `fecha_fin` es null |
-| fuente_query | string | watch_query que disparó el scrape |
+| activo | bool | True si `fecha_fin` es null (Meta) · True si `fecha_fin` < 7 días atrás (Google · heurística por lag de transparency reporting) |
+| fuente_query | string | watch_query que disparó el último scrape |
+| keywords_pautadas | array of string | (Build 2.2 · Google Ads) queries del workspace que han detectado este ad · array set acumulativo via `$addToSet` |
 | primera_deteccion | datetime | timestamp de upsert inicial · `$setOnInsert` |
 | ultima_deteccion | datetime | timestamp del último scrape donde aparece |
 | created_at, updated_at | datetime | |

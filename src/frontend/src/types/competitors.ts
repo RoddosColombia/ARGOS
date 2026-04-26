@@ -13,4 +13,5 @@ export interface CompetitorAd {
   formato: string;
   activo: boolean;
   fuente_query: string;
+  keywords_pautadas: string[];
 }

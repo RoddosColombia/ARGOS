@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     apify_api_token: str = Field(default="", alias="APIFY_API_TOKEN")
+    serpapi_api_key: str = Field(default="", alias="SERPAPI_API_KEY")
 
     @property
     def cors_origin_list(self) -> list[str]:

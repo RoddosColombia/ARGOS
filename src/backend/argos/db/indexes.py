@@ -114,6 +114,23 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── keywords (Build 1.3 · Trends agent) ─────────────────────────────────
+    created[col.KEYWORDS] = await db[col.KEYWORDS].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("keyword", ASCENDING)],
+            name="workspace_keyword_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("spike_detected", ASCENDING)],
+            name="workspace_spike",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("updated_at", DESCENDING)],
+            name="workspace_updated_desc",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

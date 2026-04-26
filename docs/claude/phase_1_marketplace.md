@@ -22,6 +22,21 @@ Primera fase funcional. Marketplace Agent consume MELI, Trends consume SerpAPI, 
 
 ## Decisiones arquitectónicas tomadas
 
+### Build 1.3 · Trends agent (SerpAPI) + alerts agent + vista /trends (2026-04-26)
+
+- **TrendsAgent + SerpApiClient** consultan Google Trends para las keywords activas con `source=all` en watch_queries (cron diario 03:00 UTC). El cliente sigue el patrón Apify/MELI: async context manager, `enabled` por API key, `SerpApiError` para 401/429, skip silencioso si no hay key. Resultado se persiste en colección `keywords` con upsert idempotente (`$setOnInsert` para created_at) y se emite `trends.keyword.spike` cuando `delta_7d_pct > 30` O `interest_over_time >= 80`.
+- **Threshold de spike `30%`** elegido como middle-ground entre conservador (50%+, mucho ruido perdido) y agresivo (10%, demasiados eventos). Hardcoded por ahora · si genera fatiga de eventos, mover a `settings` o per-workspace en build futuro.
+- **AlertsAgent (price drops)** corre cada hora vía APScheduler `IntervalTrigger(hours=1)`. Aggregation pipeline sobre `products_history`: filtra últimas 24h, agrupa por `product_id`, compara `first.precio` vs `last.precio`. Si delta ≤ -15%, cruza con `products_catalog` para enriquecer payload (titulo, source, permalink → `competitor_url`) y emite `marketplace.price.alert`. Threshold `15%` mayor al de `marketplace.price.changed` (5%) porque alert dispara workflow downstream (Strategist consume), `price.changed` es señal cruda.
+- **Idempotencia de alertas**: el agent emite un evento por SKU por corrida. La misma caída persiste 24h → la siguiente hora vuelve a emitir. Aceptable porque el consumidor (futuro Strategist) puede deduplicar por `(sku, día)`. Documentado en docstring · si se vuelve un problema, mover a `set` semanal en agent state.
+- **`fuente: "fb"` en payload** (no `fb_marketplace`). Continuación del patrón de Build 1.2 · contrato HTTP/eventos usa el alias UI-friendly. Mapping ocurre en el sitio que emite el evento (alerts service mapea desde `products_catalog.source`).
+- **Endpoint `GET /api/v1/alerts/recent?limit=20`** consulta `argos_events` filtrando por `event_type="marketplace.price.alert"` y `timestamp_utc >= now-48h`. Sort desc + limit. Rol ceo. Schema del response es plano (no expone metadata interna del evento), apto para consumo directo del frontend.
+- **Endpoint `GET /api/v1/trends/keywords`** (no en spec original · agregado porque la vista `/trends` lo necesita). Lista todas las keywords del workspace ordenadas por `interest_over_time desc`. Rol ceo. Sin filtro de spike/no-spike · el frontend renderiza el badge según `spike_detected`.
+- **Vista `/trends`** con dos secciones: tabla de keywords + lista de alertas. TanStack Query independiente por sección con cadencias distintas (`10min` keywords, `5min` alertas) · queries fail aisladas (si alertas falla, keywords sigue renderizando). Estados de UI: loading / error / empty / con datos. Empty state explícito guía al CEO ("Sin alertas en las últimas 48h"), evita confusión de "tabla en blanco".
+- **Status badges keywords:** rojo+🔴 spike (`spike_detected=true`), azul+🔵 bajando (`delta < -10%`), verde+🟢 estable (resto). El verde es "todo bien, sin novedad" · contrasta con la semántica de `MarketplacePage` donde verde es "precio bajó respecto al promedio". Decisión: el contexto manda — en Trends, lo neutral/estable es bueno; en Marketplace, los movimientos son la señal.
+- **Sidebar item "Trends & Alertas" enabled** · segundo item live de Phase 1 después de Marketplace. Sin lógica de submenu por ahora — la vista combina ambas funcionalidades en un solo viewport scrollable.
+- **Scheduler agrega 2 jobs nuevos** (`trends_refresh` cron 03:00, `price_alert_check` interval 1h) · ambos con `max_instances=1 + coalesce=True` · wrappers con try/except que no levantan al scheduler. Tests del scheduler siguen verdes porque el wiring (build_scheduler) detecta los nuevos jobs por `id` sin necesidad de ajuste.
+- **Tests:** 11 nuevos (6 trends_service + 3 alerts_service + 2 alerts_api) backend · 2 nuevos frontend (TrendsPage). Total backend 87 (+11), frontend 16 (+2) = 103/103. Importes corregidos en Build 1.3: necesité re-exportar varios módulos por errores del hook PreToolUse — patrón de retry: Read explícito → re-Edit → verificar.
+
 ### Build 1.2 · Dashboard /marketplace + endpoint top-products (2026-04-26)
 
 - **Endpoint `GET /api/v1/marketplace/top-products`** con aggregation Mongo (`$lookup` a `products_history` + `$avg` para `precio_promedio`). Calcula `cambio_precio_pct` como `(precio_actual - precio_promedio) / precio_promedio × 100` · positivo = spike, negativo = dip. Sin history → `precio_promedio = precio_actual` y delta = 0. Sort por `precio_promedio` desc + tiebreak por `_id` para determinismo. Limit 50.
@@ -72,6 +87,10 @@ Primera fase funcional. Marketplace Agent consume MELI, Trends consume SerpAPI, 
 - **Tests: 20 nuevos (4 meli client mockeado + 8 marketplace service con Atlas real + 3 scout service + 4 scout API + 1 scheduler).** Total backend: 47 unit + 20 nuevos = 67 tests passing.
 
 ## Cambios en canónicas
+
+### Build 1.3
+- `docs/canonicas/eventos.md` · 2 eventos nuevos: `trends.keyword.spike` (delta 7d > 30% O interest ≥ 80) · `marketplace.price.alert` (drop ≥ 15% en 24h)
+- `docs/canonicas/apis_externas.md` · sección SerpAPI expandida con endpoint Build 1.3 (`/search.json?engine=google_trends`), schema output `interest_over_time.timeline_data`, sin SDK, notas implementación
 
 ### Build 1.1
 - `docs/canonicas/colecciones_mongo.md` · sección nueva "Colección: watch_queries (Build 1.1)" con schema, índices y operación

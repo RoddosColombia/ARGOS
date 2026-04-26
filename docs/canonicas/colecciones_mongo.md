@@ -223,33 +223,52 @@ Schema **canónico Build 2.1** · ads detectados en Meta Ad Library (futuro: Goo
 
 Índices: (workspace_id, platform, ad_id_externo) unique · (workspace_id, competitor_id) · (workspace_id, activo_actualmente)
 
-## Colección: social_accounts
+## Colección: social_accounts (Build 2.3)
+
+Schema canónico Build 2.3 · cuentas IG/TikTok detectadas por SocialAgent vía TikHub.
 
 | Campo | Tipo | Notas |
 |-------|------|-------|
 | _id | ObjectId | |
-| workspace_id | string | |
-| platform | enum | ig/tiktok/youtube |
-| account_handle | string | @rappi_motos etc. |
-| followers | int | |
-| relevance_score | float | calculado por Social Agent |
-| vertical | string | |
+| workspace_id | string | FK · ROG-A3 |
+| plataforma | enum | `ig` / `tiktok` / `youtube` (futuro) |
+| username | string | handle/identifier (sin `@`) |
+| seguidores | int | follower count |
+| engagement_rate | float | avg_likes / followers × 100 · cap a 100 |
+| descripcion | string | bio/signature (≤500 chars) |
+| url_perfil | string | share_url o profile_url |
+| relevancia_score | float | log10(seguidores)*10 + engagement*2 · cap 100 |
+| sec_uid | string | TikTok-only · necesario para fetch posts |
+| fuente_query | string | watch_query que detectó la cuenta |
 | ultima_metricas_at | datetime | |
+| created_at, updated_at | datetime | |
 
-## Colección: social_posts
+Índices: `(workspace_id, plataforma, username)` **unique** · `(workspace_id, relevancia_score desc)` · `(workspace_id, seguidores desc)`
+
+## Colección: social_posts (Build 2.3)
+
+Posts virales (≥ 50K vistas) detectados por SocialAgent.
 
 | Campo | Tipo | Notas |
 |-------|------|-------|
 | _id | ObjectId | |
-| workspace_id | string | |
-| account_id | ObjectId | FK social_accounts |
-| post_external_id | string | |
-| views | int | |
-| engagement_rate | float | |
-| caption | string | |
-| related_skus_detected | array | NLP detection |
-| viral_flag | bool | |
-| posted_at | datetime | |
+| workspace_id | string | FK · ROG-A3 |
+| plataforma | enum | `ig` / `tiktok` |
+| username | string | denormalizado · evita join cuando se renderiza |
+| post_external_id | string | ID del post en la plataforma |
+| url_post | string | permalink |
+| descripcion | string | caption/desc (≤1000 chars) |
+| vistas | int | play_count o video_view_count |
+| likes | int | digg_count o like_count |
+| comentarios | int | comment_count |
+| hashtags | array of string | extraídos de la descripción · max 30 · lowercase deduped |
+| fecha_publicacion | datetime nullable | create_time parseado |
+| viral_flag | bool | True (solo se persisten los virales) |
+| created_at, updated_at | datetime | |
+
+Índices: `(workspace_id, post_external_id)` **unique** · `(workspace_id, vistas desc)` · `(workspace_id, fecha_publicacion desc)`
+
+**Nota Build 2.3**: el FK a `social_accounts` se denormaliza por `username` en vez de `account_id` ObjectId · facilita queries directas y evita lookups en el endpoint frontend. La integridad referencial se mantiene a nivel app (SocialAgent siempre upsert account antes de upsert posts del mismo username).
 
 ## Colección: keywords
 

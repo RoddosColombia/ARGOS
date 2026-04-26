@@ -181,13 +181,20 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Campo | Valor |
 |-------|-------|
 | Función | Datos sociales TikTok + IG + YouTube + X |
-| Estado | Tier básico ($30-50/mes) |
+| Estado | Producción parcial desde Build 2.3 (TikTok + IG · sin token configurado · skip silencioso) |
 | Criticidad | Media |
-| Auth | API Token |
-| Endpoints clave | 900+ APIs distintas · ver docs TikHub |
-| Eventos producidos | social.account.viral_detected, social.reel.viral |
-| Fallback | Si cae: posponer trends sociales hasta restauración |
-| Dueño | ARGOS Phase 3 |
+| Auth | API Token (`TIKHUB_API_KEY` env var) · header `Authorization: Bearer {token}` |
+| Tier | básico $30-50/mes |
+| SDK | **Sin SDK oficial async** · `httpx.AsyncClient` directo · base URL `https://api.tikhub.io` |
+| Endpoints Build 2.3 (search users) | `/api/v1/tiktok/web/fetch_user_search_result?keyword=KEY` · `/api/v1/instagram/web/fetch_search_user?keyword=KEY` |
+| Endpoints Build 2.3 (user posts) | `/api/v1/tiktok/web/fetch_user_post?secUid=XXX&count=N` (TikTok requiere `sec_uid` que viene del search) · `/api/v1/instagram/web/fetch_user_posts?username=XXX` |
+| Endpoints futuros | YouTube Shorts (Phase 7) · X/Twitter (Phase 8+) |
+| Aliases tolerados en parser | users: `data/users/user_list/results` · posts: `data/aweme_list/posts/items/media` (cliente abstrae la variabilidad) |
+| Eventos producidos | `social.account.trending` (Build 2.3+) · `social.reel.viral` (futuro · cuando se agregue rank histórico) |
+| Costo | Pay-per-call · paquete básico $30-50/mes alcanza para ~3K calls/día |
+| Fallback | Si cae: posponer social refresh hasta restauración · job es non-blocking · errores aislados por keyword |
+| Dueño | ARGOS desde Build 2.3 |
+| Notas de implementación | `argos/partners/tikhub/client.py` · `enabled` por presencia de API key · `search_users(platform, query)` + `user_posts(platform, username, sec_uid)` métodos públicos · TikHubError para 401/429 · Consumido por `agents/social/service.py::SocialAgent` |
 
 ## SerpAPI
 

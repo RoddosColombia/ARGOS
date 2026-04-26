@@ -17,6 +17,7 @@ from argos.agents.alerts.service import check_price_drops
 from argos.agents.competitors.google_ads_service import refresh_google_ads
 from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.scout.service import tick as scout_tick
+from argos.agents.social.service import refresh_social
 from argos.agents.trends.service import refresh_trends
 
 logger = logging.getLogger("argos.scheduler")
@@ -67,6 +68,14 @@ async def _google_ads_refresh_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_google_ads_refresh", extra=stats.as_dict())
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_google_ads_refresh_failed")
+
+
+async def _social_refresh_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await refresh_social(db)
+        logger.info("scheduled_social_refresh", extra=stats.as_dict())
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_social_refresh_failed")
 
 
 def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
@@ -133,6 +142,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=12),
         id="google_ads_refresh",
         name="Google Ads refresh · SerpAPI google_ads_transparency_center",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Social listening · diario 04:00 UTC via TikHub
+    scheduler.add_job(
+        _social_refresh_job,
+        args=[db],
+        trigger=CronTrigger(hour=4, minute=0),
+        id="social_refresh",
+        name="Social refresh · TikHub IG/TikTok cuentas + posts virales",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

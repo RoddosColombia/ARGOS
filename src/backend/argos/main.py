@@ -13,6 +13,7 @@ from argos.api.v1.competitors import router as competitors_router
 from argos.api.v1.health import router as health_router
 from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.scout import router as scout_router
+from argos.api.v1.social import router as social_router
 from argos.api.v1.trends import router as trends_router
 from argos.auth.router import router as auth_router
 from argos.auth.user_store import EnvUserStore, MongoUserStore, set_user_store
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(alerts_router)
     app.include_router(trends_router)
     app.include_router(competitors_router)
+    app.include_router(social_router)
 
     return app
 

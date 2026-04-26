@@ -253,3 +253,33 @@ async def publish_competitors_ad_detected(
         },
         correlation_id=correlation_id,
     )
+
+
+# ─── Helpers Build 2.3 ───────────────────────────────────────────────────
+
+
+async def publish_social_account_trending(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    plataforma: str,
+    username: str,
+    seguidores: int,
+    relevancia_score: float,
+    fuente_query: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="social.account.trending",
+        workspace_id=workspace_id,
+        producer="social_agent",
+        payload={
+            "plataforma": plataforma,
+            "username": username[:200],
+            "seguidores": seguidores,
+            "relevancia_score": relevancia_score,
+            "fuente_query": fuente_query,
+        },
+        correlation_id=correlation_id,
+    )

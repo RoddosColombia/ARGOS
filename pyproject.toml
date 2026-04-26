@@ -56,3 +56,4 @@ ignore = ["B008"]  # FastAPI uses function calls in Depends() defaults
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "src/backend/argos/agents/classifier/service.py" = ["E501"]  # SYSTEM_PROMPT con líneas largas legibles
+"src/backend/argos/agents/strategist/service.py" = ["E501"]  # SYSTEM_PROMPT con líneas largas legibles

@@ -284,6 +284,28 @@ Posts virales (≥ 50K vistas) detectados por SocialAgent.
 | spike_detected | bool | |
 | updated_at | datetime | |
 
+## Colección: briefings (Build 3.1)
+
+Morning Briefings generados por StrategistAgent + persistidos por ExecutiveAgent. Una entrada por (workspace_id, fecha).
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | FK · ROG-A3 |
+| fecha | string | YYYY-MM-DD UTC · clave de idempotencia con workspace_id |
+| mercado_24h | object | `{nuevos_skus: int, bajas_precio: int, nuevas_promos: int}` |
+| acciones_del_dia | array of object | Máx 3 · `{accion, justificacion, impacto_esperado, prioridad: Alta/Media/Baja}` |
+| estado_mercado | string | resumen ejecutivo del día (≤1000 chars) |
+| modelo_usado | string | versión pineada del modelo (ej. `claude-sonnet-4-6-20260301`) |
+| tokens_input | int | input tokens consumidos en la llamada |
+| tokens_output | int | output tokens generados |
+| created_at | datetime | `$setOnInsert` · timestamp del primer briefing del día |
+| updated_at | datetime | refrescado en re-run del job |
+
+Índices: `(workspace_id, fecha)` **unique** · `(workspace_id, created_at desc)`
+
+**Idempotencia**: re-runs del `morning_briefing_job` en el mismo día actualizan el documento (no insertan duplicado). El evento `briefing.published` se emite en cada corrida — útil para auditar quién/cuándo se generó.
+
 ## Colección: recommendations
 
 | Campo | Tipo | Notas |

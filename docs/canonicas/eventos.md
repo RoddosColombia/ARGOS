@@ -115,7 +115,7 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | event_type | Productor | Consumidores | Payload clave |
 |------------|-----------|--------------|---------------|
 | sismo.inventory.synced | sismo_agent | strategist, dashboard | {total_skus, slow_count} · emitido por `sync_sismo_inventory_job` (cron 6h) tras persistir el snapshot del día en `sismo_inventory` · NO se emite si SISMO_API_URL vacío (skip silencioso) · Build 4.1+ |
-| sismo.sales.daily.synced | sismo_sync | strategist, dashboard | {date, sales_count, total_amount} |
+| sismo.sales.daily.synced | sismo_agent | strategist, dashboard | {date: YYYY-MM-DD, sales_count, units_total, revenue_total_cop} · emitido por `sync_sismo_sales_daily_job` (cron 01:00 UTC, día anterior) tras persistir `sismo_sales_daily` · NO se emite si SISMO no está configurado · Build 4.2+ |
 | sismo.customer.created | sismo_sync | whatsapp_agent | {customer_id, source: argos/web} |
 | sismo.loanbook.snapshot | sismo_sync | score_engine | {snapshot_id, records_count, timestamp} |
 | argos.recommendation.published | strategist | sismo_radar_sync | {recommendation_id, type, sku, action} |

@@ -409,6 +409,31 @@ async def publish_sismo_inventory_synced(
     )
 
 
+async def publish_sismo_sales_daily_synced(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    fecha: str,
+    sales_count: int,
+    units_total: int,
+    revenue_total: float,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="sismo.sales.daily.synced",
+        workspace_id=workspace_id,
+        producer="sismo_agent",
+        payload={
+            "date": fecha,
+            "sales_count": int(sales_count),
+            "units_total": int(units_total),
+            "revenue_total_cop": round(float(revenue_total), 2),
+        },
+        correlation_id=correlation_id,
+    )
+
+
 async def publish_recommendation_evaluated(
     db: AsyncIOMotorDatabase,
     *,

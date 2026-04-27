@@ -36,6 +36,53 @@ logger = logging.getLogger("argos.agents.strategist.impact")
 EVAL_WINDOW_DAYS = 7
 LEARNING_MAX_TOKENS = 250
 
+# Build 4.2: tipos que se evalúan con ventas reales de SISMO (no solo con events)
+SALES_DRIVEN_TYPES = {"pricing_change", "promo_launch"}
+
+
+async def _aggregate_real_sales_window(
+    db: AsyncIOMotorDatabase,
+    workspace_id: str,
+    *,
+    executed_at: datetime,
+    window_days: int,
+) -> dict[str, Any]:
+    """Suma ventas del workspace en `[executed_at, executed_at+window]` desde sismo_sales_daily.
+
+    Devuelve `{units_sold, revenue_cop, days_with_data, sku_count}`. Si no hay
+    sismo_sales_daily poblada (Build 4.2 sin SISMO real o pre-Build), devuelve
+    `{}` y el caller cae al heurístico clásico.
+    """
+    end = executed_at + timedelta(days=window_days)
+    start_str = executed_at.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
+
+    pipeline = [
+        {"$match": {
+            "workspace_id": workspace_id,
+            "date": {"$gte": start_str, "$lte": end_str},
+        }},
+        {"$group": {
+            "_id": None,
+            "units_sold": {"$sum": "$units_sold"},
+            "revenue": {"$sum": "$revenue"},
+            "days": {"$addToSet": "$date"},
+            "skus": {"$addToSet": "$sku"},
+        }},
+    ]
+    docs = await db[col.SISMO_SALES_DAILY].aggregate(pipeline).to_list(length=1)
+    if not docs:
+        return {}
+    d = docs[0]
+    return {
+        "units_sold": int(d.get("units_sold") or 0),
+        "revenue_cop": round(float(d.get("revenue") or 0), 2),
+        "days_with_data": len(d.get("days") or []),
+        "sku_count": len(d.get("skus") or []),
+        "window_start": start_str,
+        "window_end": end_str,
+    }
+
 
 def _heuristic_hit_rate(
     recommendation: dict[str, Any], events: list[dict[str, Any]]
@@ -73,6 +120,7 @@ async def _generate_learning(
     hit_rate: float,
     events_count: int,
     *,
+    sales_metrics: dict[str, Any] | None = None,
     anthropic_client: Any | None = None,
 ) -> str:
     """Genera reflexión post-mortem corta con Sonnet 4.6 · ~50-80 palabras."""
@@ -84,14 +132,25 @@ async def _generate_learning(
         anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     outcome = "funcionó" if hit_rate >= 0.7 else "funcionó parcialmente" if hit_rate >= 0.4 else "no funcionó"
+    sales_block = ""
+    if sales_metrics:
+        sales_block = (
+            f"Ventas reales SISMO en ventana 7d post-ejecución:\n"
+            f"  - units_sold: {sales_metrics.get('units_sold', 0)}\n"
+            f"  - revenue COP: {sales_metrics.get('revenue_cop', 0)}\n"
+            f"  - días con datos: {sales_metrics.get('days_with_data', 0)}/7\n"
+            f"  - SKUs distintos: {sales_metrics.get('sku_count', 0)}\n"
+        )
     user_message = (
         f"Recomendación: {recommendation.get('action_description', '')}\n"
         f"Tipo: {recommendation.get('type', 'pricing_change')}\n"
         f"Prioridad original: {recommendation.get('priority', 'Media')}\n"
         f"Justificación original: {recommendation.get('rationale', '')}\n"
         f"Hit rate medido: {hit_rate} · {outcome}\n"
-        f"Eventos relacionados detectados en 7d post-ejecución: {events_count}\n\n"
+        f"Eventos relacionados detectados en 7d post-ejecución: {events_count}\n"
+        f"{sales_block}\n"
         "En 50-80 palabras, escribe una reflexión post-mortem para el CEO de RODDOS. "
+        "Si hay datos de ventas, úsalos para argumentar (ej: \"vendieron X unidades vs el target Y\"). "
         "Si funcionó, qué condiciones del mercado lo facilitaron. Si no funcionó, qué "
         "señal del input fue malinterpretada. Sin markdown · texto plano."
     )
@@ -156,8 +215,36 @@ async def evaluate_pending_recommendations(
             events = await events_cursor.to_list(length=200)
 
             hit_rate = _heuristic_hit_rate(rec, events)
+
+            # Build 4.2: cruce con ventas reales para pricing_change/promo_launch
+            actual_impact: dict[str, Any] = {
+                "metric": rec.get("expected_impact", {}).get("metric", "qualitative"),
+                "valor_real": str(hit_rate),
+                "medido_at": now,
+            }
+            sales_metrics: dict[str, Any] = {}
+            if rec.get("type") in SALES_DRIVEN_TYPES:
+                sales_metrics = await _aggregate_real_sales_window(
+                    db, workspace_id,
+                    executed_at=executed_at,
+                    window_days=eval_window_days,
+                )
+                if sales_metrics:
+                    actual_impact = {
+                        "metric": "units_sold_and_revenue",
+                        "units_sold": sales_metrics["units_sold"],
+                        "revenue_cop": sales_metrics["revenue_cop"],
+                        "days_with_data": sales_metrics["days_with_data"],
+                        "window_start": sales_metrics["window_start"],
+                        "window_end": sales_metrics["window_end"],
+                        "hit_rate_heuristic": hit_rate,
+                        "medido_at": now,
+                    }
+
             learning = await _generate_learning(
-                rec, hit_rate, len(events), anthropic_client=anthropic_client
+                rec, hit_rate, len(events),
+                sales_metrics=sales_metrics,
+                anthropic_client=anthropic_client,
             )
 
             await db[col.RECOMMENDATIONS].update_one(
@@ -165,11 +252,7 @@ async def evaluate_pending_recommendations(
                 {
                     "$set": {
                         "status": "evaluada",
-                        "actual_impact": {
-                            "metric": rec.get("expected_impact", {}).get("metric", "qualitative"),
-                            "valor_real": str(hit_rate),
-                            "medido_at": now,
-                        },
+                        "actual_impact": actual_impact,
                         "hit_rate_contribution": hit_rate,
                         "learning": learning,
                         "evaluated_at": now,

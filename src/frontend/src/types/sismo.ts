@@ -18,3 +18,23 @@ export interface InventoryResponse {
   items: InventoryItem[];
   total: number;
 }
+
+export interface SaleItem {
+  sku: string;
+  date: string;
+  units_sold: number;
+  revenue: number;
+  channel: string;
+  fecha_sync: string | null;
+}
+
+export interface SalesResponse {
+  date: string | null;
+  sku: string | null;
+  items: SaleItem[];
+  totals: {
+    units_sold: number;
+    revenue_cop: number;
+    count: number;
+  };
+}

@@ -18,14 +18,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from argos.config import get_settings
 from argos.db import collections as col
-from argos.db.events import publish_sismo_inventory_synced
+from argos.db.events import (
+    publish_sismo_inventory_synced,
+    publish_sismo_sales_daily_synced,
+)
 from argos.partners.sismo.client import SismoClient
 
 logger = logging.getLogger("argos.agents.sismo")
@@ -182,4 +185,142 @@ async def sync_sismo_inventory_job(
         updated=updated,
     )
     logger.info("sismo_sync_done", extra=stats.as_dict())
+    return stats
+
+
+# ─── Build 4.2 · ventas diarias ──────────────────────────────────────────
+
+
+@dataclass
+class SalesSyncStats:
+    enabled: bool
+    fecha: str
+    sales_count: int
+    units_total: int
+    revenue_total: float
+    inserted: int
+    updated: int
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "fecha": self.fecha,
+            "sales_count": self.sales_count,
+            "units_total": self.units_total,
+            "revenue_total": self.revenue_total,
+            "inserted": self.inserted,
+            "updated": self.updated,
+        }
+
+
+def _normalize_sales_item(item: dict[str, Any], default_fecha: str) -> dict[str, Any] | None:
+    """Acepta variaciones de naming · descarta filas sin sku."""
+    sku = str(item.get("sku") or item.get("sku_normalizado") or item.get("codigo") or "").strip()
+    if not sku:
+        return None
+    try:
+        units = int(item.get("units_sold") or item.get("unidades") or item.get("cantidad") or 0)
+    except (TypeError, ValueError):
+        units = 0
+    try:
+        revenue = float(
+            item.get("revenue") or item.get("revenue_cop") or item.get("total") or item.get("monto") or 0
+        )
+    except (TypeError, ValueError):
+        revenue = 0.0
+    fecha = str(item.get("date") or item.get("fecha") or default_fecha)[:10]
+    channel = str(item.get("channel") or item.get("canal") or "n/a")[:50]
+    return {
+        "sku": sku,
+        "date": fecha,
+        "units_sold": units,
+        "revenue": revenue,
+        "channel": channel,
+    }
+
+
+async def sync_sismo_sales_daily_job(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str = "RODDOS",
+    fecha: str | None = None,
+    agent: SismoAgent | None = None,
+) -> SalesSyncStats:
+    """Job: descarga ventas del día anterior (UTC) y persiste en sismo_sales_daily.
+
+    Idempotencia: unique index en (workspace_id, date, sku) hace que re-runs
+    actualicen las filas en lugar de duplicar. Si SISMO devuelve filas
+    "tarde" (ventas que se sincronizan al día siguiente) el segundo run las
+    upserta correctamente.
+    """
+    if agent is None:
+        agent = SismoAgent()
+
+    if fecha is None:
+        # Default: ayer UTC. La job corre 01:00 UTC (jueves 01:00 → ventas miércoles).
+        fecha = (datetime.now(tz=UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    if not agent.enabled:
+        logger.warning("sismo_sales_sync_skipped_no_credentials", extra={"date": fecha})
+        return SalesSyncStats(
+            enabled=False, fecha=fecha, sales_count=0, units_total=0,
+            revenue_total=0.0, inserted=0, updated=0,
+        )
+
+    raw_items = await agent.get_daily_sales(fecha)
+    now = datetime.now(tz=UTC)
+
+    inserted = 0
+    updated = 0
+    units_total = 0
+    revenue_total = 0.0
+    sales_count = 0
+
+    for raw in raw_items:
+        normalized = _normalize_sales_item(raw, default_fecha=fecha)
+        if normalized is None:
+            continue
+        sales_count += 1
+        units_total += normalized["units_sold"]
+        revenue_total += normalized["revenue"]
+        result = await db[col.SISMO_SALES_DAILY].update_one(
+            {
+                "workspace_id": workspace_id,
+                "date": normalized["date"],
+                "sku": normalized["sku"],
+            },
+            {
+                "$set": {
+                    **normalized,
+                    "workspace_id": workspace_id,
+                    "fecha_sync": now,
+                    "updated_at": now,
+                },
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+        )
+        if result.upserted_id is not None:
+            inserted += 1
+        elif result.modified_count > 0:
+            updated += 1
+
+    await publish_sismo_sales_daily_synced(
+        db,
+        workspace_id=workspace_id,
+        fecha=fecha,
+        sales_count=sales_count,
+        units_total=units_total,
+        revenue_total=revenue_total,
+    )
+    stats = SalesSyncStats(
+        enabled=True,
+        fecha=fecha,
+        sales_count=sales_count,
+        units_total=units_total,
+        revenue_total=revenue_total,
+        inserted=inserted,
+        updated=updated,
+    )
+    logger.info("sismo_sales_sync_done", extra=stats.as_dict())
     return stats

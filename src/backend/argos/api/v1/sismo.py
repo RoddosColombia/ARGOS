@@ -78,3 +78,71 @@ async def list_inventory(
         "items": [_serialize(d) for d in docs],
         "total": len(docs),
     }
+
+
+def _serialize_sale(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sku": doc.get("sku", ""),
+        "date": doc.get("date", ""),
+        "units_sold": int(doc.get("units_sold") or 0),
+        "revenue": float(doc.get("revenue") or 0),
+        "channel": doc.get("channel", ""),
+        "fecha_sync": doc["fecha_sync"].isoformat() if doc.get("fecha_sync") else None,
+    }
+
+
+@router.get("/sales")
+async def list_sales(
+    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    fecha: Annotated[
+        str | None,
+        Query(
+            alias="date",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+            description="YYYY-MM-DD · default: día más reciente con datos",
+        ),
+    ] = None,
+    sku: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 100,
+) -> dict[str, Any]:
+    """Lista ventas del día solicitado · si `date` no se pasa, usa el último día con datos.
+
+    Respuesta: `{date, sku, items, totals: {units_sold, revenue_cop, count}}`.
+    Filtros: `date=YYYY-MM-DD` · `sku=XXX` para una sola línea.
+    """
+    _ensure_mongo()
+    db = get_database()
+
+    if fecha is None:
+        latest = await db[col.SISMO_SALES_DAILY].aggregate(
+            [
+                {"$match": {"workspace_id": user.workspace_id}},
+                {"$group": {"_id": None, "max_date": {"$max": "$date"}}},
+            ]
+        ).to_list(length=1)
+        if not latest or not latest[0].get("max_date"):
+            return {
+                "date": None, "sku": sku, "items": [],
+                "totals": {"units_sold": 0, "revenue_cop": 0.0, "count": 0},
+            }
+        fecha = latest[0]["max_date"]
+
+    query: dict[str, Any] = {"workspace_id": user.workspace_id, "date": fecha}
+    if sku:
+        query["sku"] = sku
+
+    cursor = db[col.SISMO_SALES_DAILY].find(query).sort("revenue", -1).limit(limit)
+    docs = await cursor.to_list(length=limit)
+
+    units = sum(int(d.get("units_sold") or 0) for d in docs)
+    revenue = round(sum(float(d.get("revenue") or 0) for d in docs), 2)
+    return {
+        "date": fecha,
+        "sku": sku,
+        "items": [_serialize_sale(d) for d in docs],
+        "totals": {
+            "units_sold": units,
+            "revenue_cop": revenue,
+            "count": len(docs),
+        },
+    }

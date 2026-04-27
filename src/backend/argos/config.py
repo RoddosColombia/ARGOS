@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     twilio_whatsapp_from: str = Field(default="", alias="TWILIO_WHATSAPP_FROM")
     twilio_whatsapp_to: str = Field(default="", alias="TWILIO_WHATSAPP_TO")
 
+    # Score Engine externo · repo de Iván · ARGOS solo lee resultados
+    roddos_mongodb_uri: str = Field(default="", alias="RODDOS_MONGODB_URI")
+    roddos_mongodb_database: str = Field(default="roddos_comercial", alias="RODDOS_MONGODB_DATABASE")
+    score_engine_api_url: str = Field(default="", alias="SCORE_ENGINE_API_URL")
+    score_engine_api_key: str = Field(default="", alias="SCORE_ENGINE_API_KEY")
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Lista de orígenes permitidos, defensiva en profundidad.

@@ -108,6 +108,14 @@ Reglas universales:
 
 ## Colección: scoring_solicitudes
 
+> **Corrección arquitectónica 2026-04-27**: esta colección NO vive en el cluster
+> de ARGOS (`MONGODB_URI`). Vive en el cluster Atlas compartido con RODDOS-web,
+> apuntado por `RODDOS_MONGODB_URI` · base `roddos_comercial` · escrita por el
+> Score Engine externo (repo independiente de Iván). ARGOS solo LEE vía
+> `ScoreReader` con scope read-only (ROG-A11). El POST /api/v1/score/evaluate
+> es pass-through HTTP al Score Engine de Iván — ARGOS no toca esta colección
+> en escritura.
+
 Schema fiel al Build 20 de RODDOS, con marca de origen `argos`.
 
 | Campo | Tipo | Notas |

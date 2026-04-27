@@ -281,3 +281,20 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Rate limits | Documentados en lado SISMO · cliente aplica `timeout=30s` y propaga 429 como `SismoError(429)` |
 | Fallback | Si SISMO cae: el job loguea `SismoError` y skipa el día · el último snapshot sigue siendo accesible vía `/api/v1/sismo/inventory` (read sobre Mongo, no llama SISMO en runtime) |
 | Dueño | RODDOS S.A.S. (admin web) · ARGOS es consumidor |
+
+## Score Engine externo (Phase 2 · repo independiente de Iván)
+
+| Campo | Valor |
+|-------|-------|
+| Función | Motor crediticio que evalúa solicitudes (RiskSeal + AUCO + Palenca + XGBoost + Claude) y persiste resultados en MongoDB compartido. ARGOS NO ejecuta scores · es pass-through HTTP. |
+| Estado | Phase 2 · ARGOS lo expone vía `POST /api/v1/score/evaluate` (forward) y `GET /api/v1/score/solicitudes` (lee desde shared DB). |
+| Criticidad | Crítica para flujo de crédito · pero ARGOS sigue funcionando si está down (frontend muestra `decision="no_configurado"` o lista vacía) |
+| Auth | `Authorization: Bearer {SCORE_ENGINE_API_KEY}` · key emitida por el repo de Iván · scope: solo `/v1/evaluate` |
+| Base URL | `SCORE_ENGINE_API_URL` (env var · ej. `https://score-engine.roddos.internal`) |
+| Endpoints consumidos | `POST /v1/evaluate` con payload KYC + partners → respuesta `{decision, score_final, solicitud_id, narrativa, ...}` |
+| Cliente | `argos/agents/score/client.py` · `ScoreEngineClient` async (httpx) · timeout 10s · 1 retry en 5xx · skip silencioso sin URL → mock `decision="no_configurado"` |
+| Persistencia | Score Engine escribe en `RODDOS_MONGODB_URI` DB `roddos_comercial` colección `scoring_solicitudes`. ARGOS lee con `ScoreReader` |
+| Eventos producidos | `score.evaluated` lo emite el Score Engine en su propio bus interno · ARGOS no consume directamente del bus de Iván |
+| Rate limits | Documentados en repo de Iván · cliente propaga 429 como `ScoreEngineError` |
+| Fallback | Si Score Engine cae: ARGOS devuelve `502 Bad Gateway` con detalle del status upstream · frontend muestra error pero el dashboard sigue navegable |
+| Dueño | Iván (RODDOS) · repo separado · ROG-S1 cero llamadas cruzadas en runtime · ARGOS solo HTTP/Mongo lectura |

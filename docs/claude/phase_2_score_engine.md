@@ -49,3 +49,85 @@ Replicar dentro de ARGOS el motor de score del Build 20 del admin web (www.roddo
 - Fecha cierre: _pendiente_
 - Cerrado por: _pendiente_
 - PR final: _pendiente_
+
+---
+
+## Corrección arquitectónica · 2026-04-27
+
+**Decisión del CEO**: el Score Engine pasa a ser un repo independiente operado
+por Iván, separado de ARGOS. ARGOS NO ejecuta scores.
+
+**Razón**: separación clean de dominios — el motor de score se desarrolla,
+versiona y despliega en su propio ciclo (importante porque cambios en pesos
+del XGBoost o reglas duras requieren governance crediticia distinta del ciclo
+de inteligencia de mercado de ARGOS). El admin web (www.roddos.com) y ARGOS
+ahora consumen el mismo motor en lugar de mantener clones separados.
+
+### Cambios en la rama `phase-2/score-engine-readonly`
+
+**Eliminado** (vs la rama `phase-2/score-engine` que NO se mergeó a main):
+- `agents/score/xgboost_scorer.py`
+- `agents/score/claude_scorer.py`
+- `agents/score/engine.py`
+- `api/v1/score.py` (versión que ejecutaba el score)
+- `db/collections.py` línea `SCORING_SOLICITUDES` (la colección ya no es de ARGOS)
+- `db/indexes.py` índices de `scoring_solicitudes`
+- `db/events.py` `publish_score_evaluated` (lo emite el repo de Iván en su bus)
+
+**Agregado**:
+- `agents/score/reader.py` · `ScoreReader` lee desde `RODDOS_MONGODB_URI` DB `roddos_comercial` colección `scoring_solicitudes`. Skip silencioso sin URI. Multi-tenant filtra por `workspace_id` (ROG-A3 propaga aún cuando el writer es otro).
+- `agents/score/client.py` · `ScoreEngineClient` POST a `SCORE_ENGINE_API_URL/v1/evaluate` con `Authorization: Bearer {SCORE_ENGINE_API_KEY}` · timeout 10s · 1 retry · skip silencioso sin URL.
+- `api/v1/score.py` reescrito como pass-through:
+  - `POST /api/v1/score/evaluate` reenvía payload tal cual al Score Engine externo y devuelve respuesta cruda
+  - `GET /api/v1/score/solicitudes` lee del shared DB
+  - `GET /api/v1/score/config` expone URL del Score Engine para banner del frontend
+- `partners/{riskseal,auco,palenca}/client.py` · stubs sin cambios; quedan disponibles para que el WhatsApp Agent los invoque en Phase 3 durante el flujo de cotización (preview de fraude/biometría/ingresos antes de mandar al Score Engine real).
+
+**Frontend**:
+- `ScoringPage.tsx` agrega banner que muestra el `SCORE_ENGINE_API_URL` configurado · empty state mejorado en historial cuando `RODDOS_MONGODB_URI` no está set.
+- Sidebar Scoring `enabled: true`.
+
+**Config + .env.example**:
+- Nuevas vars: `RODDOS_MONGODB_URI`, `RODDOS_MONGODB_DATABASE` (default `roddos_comercial`), `SCORE_ENGINE_API_URL`, `SCORE_ENGINE_API_KEY`.
+- Eliminadas (de la rama anterior NO mergeada): `RISKSEAL_API_KEY/AUCO_API_KEY/PALENCA_API_KEY/SCORE_ENGINE_VERSION` — mantenidas conceptualmente: las de partners siguen existiendo en el repo de Iván · `SCORE_ENGINE_VERSION` ahora se reporta dentro del response del Score Engine externo (campo `engine_version` en `scoring_solicitudes`).
+
+### Decisiones técnicas de la corrección
+
+- **`ScoreReader` no usa el cluster ARGOS** · construye su propio `AsyncIOMotorClient` con `RODDOS_MONGODB_URI`. Conexión lazy (solo abre cuando se llama un método). Cierra explícitamente al final de cada request del API.
+- **`ScoreEngineClient.evaluate(client=...)` permite inyectar httpx.AsyncClient** · indispensable para tests con MockTransport. Cuando se pasa, `ScoreEngineClient` no abre/cierra el client (caller es dueño).
+- **Pass-through preserva campos del response** · ARGOS NO altera el schema del response del Score Engine. Solo asegura que `decision`, `score_final`, `solicitud_id` estén presentes (con defaults si el upstream omite). El frontend muestra el JSON tal cual.
+- **Retry policy: 1 retry en 5xx, 0 en 4xx** · 4xx es error del cliente (payload malformado), no del Score Engine. 5xx es transient · 1 retry con timeout corto (10s) limita el blast radius a 20s en peor caso.
+
+### Tests reescritos
+
+- 4 backend `test_score_engine.py` corrección arquitectónica:
+  - `test_client_skip_silencioso_sin_url`
+  - `test_client_forward_payload_y_parsea_respuesta` (httpx.MockTransport)
+  - `test_client_4xx_levanta_error`
+  - `test_client_5xx_reintenta_y_levanta_si_persiste`
+- 1 backend `test_reader_skip_silencioso_sin_uri`
+- 2 backend integration con shared DB (Mongo real, DB separada `argos_test_roddos_shared`):
+  - `test_reader_lee_solicitudes_filtradas_por_workspace` (verifica ROG-A3 cross-workspace)
+  - `test_reader_get_by_id`
+- 1 backend integration end-to-end:
+  - `test_api_evaluate_pass_through_y_solicitudes_lee_shared_db`
+- 1 frontend (`ScoringPage.test.tsx`): banner config + form submit + render de result
+
+Total: 8 backend + 1 frontend = 9 nuevos · suite full pasando.
+
+### Errores cometidos durante esta corrección
+
+| Error | Causa | Solución |
+| --- | --- | --- |
+| Frontend test: `getByText(/score-engine\.roddos\.com/)` no matchea texto adentro de `<code>` | DOM testing-library `getByText` busca match exacto en text node del elemento, no descendientes | Cambiado a `waitFor + banner.textContent.toContain(...)` que itera el árbol |
+
+### DTs activas tras la corrección
+
+- **DT-024 · Frontend no renderiza KYC details enriquecidos** · El response del Score Engine externo puede traer campos extra (partners breakdowns, scorecard features) que ARGOS pasa sin procesar. El frontend actualmente solo muestra los canónicos. Cuando Iván defina el schema final, expandir `ScoreEvaluateResponse` y los componentes.
+- **DT-025 · ARGOS no audita las llamadas a /evaluate** · Pass-through actual no escribe a `audit_log` (ROG-A12). Aceptable porque el Score Engine externo audita en su propio side. Si auditoría dual es requerida, agregar middleware logging.
+
+### Cierre de la corrección
+
+- Cerrado por: Andrés San Juan (CEO) + Claude Code · 2026-04-27
+- Rama: `phase-2/score-engine-readonly` → PR
+- **Próximo: Phase 3** WhatsApp Agent · invoca el ScoreEngineClient real durante el flujo de cotización + crédito.

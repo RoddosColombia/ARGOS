@@ -25,6 +25,14 @@ _DEFAULT_WATCH_QUERIES: tuple[str, ...] = (
     "repuestos TVS Raider 125",
 )
 
+_DEFAULT_CATEGORIES: tuple[tuple[str, str, bool], ...] = (
+    # (slug, label, active)
+    ("repuestos_moto", "Repuestos para moto", True),
+    ("accesorios_moto", "Accesorios para moto", False),
+    ("motos", "Motos (vehículo completo)", False),
+    ("aceites_lubricantes", "Aceites y lubricantes", False),
+)
+
 
 async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
     """Seed idempotente del workspace RODDOS + user CEO + watch queries.
@@ -41,6 +49,7 @@ async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
         "workspace_created": False,
         "user_created": False,
         "watch_queries_inserted": 0,
+        "categories_inserted": 0,
     }
 
     # ─── Workspace RODDOS ────────────────────────────────────────────────────
@@ -86,7 +95,7 @@ async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
             extra={"reason": "ADMIN_EMAIL o ADMIN_PASSWORD_HASH vacíos"},
         )
 
-    # ─── Watch queries (Build 1.1) ───────────────────────────────────────
+    # ─── Watch queries (Build 1.1 + extensión config) ────────────────────
     inserted = 0
     for query_str in _DEFAULT_WATCH_QUERIES:
         wq_update = await db[col.WATCH_QUERIES].update_one(
@@ -98,6 +107,10 @@ async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
                     "source": "all",       # CEO puede ajustar a "meli" o "fb_marketplace"
                     "activa": True,
                     "prioridad": 1,
+                    "origin": "manual",
+                    "category": "repuestos_moto",
+                    "status": "active",
+                    "priority": 1,
                     "created_at": now,
                 },
             },
@@ -106,6 +119,26 @@ async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
         if wq_update.upserted_id is not None:
             inserted += 1
     result["watch_queries_inserted"] = inserted
+
+    # ─── Categories (Build config) ───────────────────────────────────────
+    cat_inserted = 0
+    for slug, label, active in _DEFAULT_CATEGORIES:
+        cat_update = await db[col.CATEGORIES].update_one(
+            {"workspace_id": workspace_id, "slug": slug},
+            {
+                "$setOnInsert": {
+                    "workspace_id": workspace_id,
+                    "slug": slug,
+                    "label": label,
+                    "active": active,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        if cat_update.upserted_id is not None:
+            cat_inserted += 1
+    result["categories_inserted"] = cat_inserted
 
     logger.info("seed_done", extra=result)
     return result

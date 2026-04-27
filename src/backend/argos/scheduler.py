@@ -16,6 +16,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from argos.agents.alerts.service import check_price_drops
 from argos.agents.competitors.google_ads_service import refresh_google_ads
 from argos.agents.competitors.meta_ads_service import refresh_meta_ads
+from argos.agents.discovery.service import run_discovery_job
 from argos.agents.executive.service import run_morning_briefing
 from argos.agents.memory.service import embed_pending_job
 from argos.agents.scout.service import tick as scout_tick
@@ -115,6 +116,17 @@ async def _sismo_sales_sync_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_sismo_sales_sync", extra=stats.as_dict())
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_sismo_sales_sync_failed")
+
+
+async def _discovery_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        result = await run_discovery_job(db)
+        logger.info("scheduled_discovery", extra={
+            "categories": result.get("categories", 0),
+            "stats_count": len(result.get("stats", [])),
+        })
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_discovery_failed")
 
 
 async def _impact_evaluation_job(db: AsyncIOMotorDatabase) -> None:
@@ -225,6 +237,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=CronTrigger(hour=1, minute=0),
         id="sismo_sales_sync",
         name="SISMO V2 sales daily · ventas del día anterior",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Discovery · diario 06:00 UTC (antes del Morning Briefing 06:45 UTC)
+    scheduler.add_job(
+        _discovery_job,
+        args=[db],
+        trigger=CronTrigger(hour=6, minute=0),
+        id="discovery",
+        name="Discovery · trending/rising/liquidating/disappearing por categoría activa",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

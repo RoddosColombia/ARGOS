@@ -221,6 +221,8 @@ class _Signals:
     # Build 4.1: contexto de inventario desde SISMO V2 (snapshot del día).
     inventory_summary: dict[str, Any] = field(default_factory=dict)
     slow_movers: list[dict[str, Any]] = field(default_factory=list)
+    # Build config: top sugerencias del DiscoveryAgent pendientes de aprobación.
+    discovery_suggestions: list[dict[str, Any]] = field(default_factory=list)
 
     def to_user_payload(self) -> dict[str, Any]:
         return {
@@ -234,6 +236,7 @@ class _Signals:
             "related_ads": self.related_ads,
             "inventory_summary": self.inventory_summary,
             "slow_movers": self.slow_movers,
+            "discovery_suggestions": self.discovery_suggestions,
         }
 
 
@@ -304,6 +307,16 @@ async def gather_signals(
     except Exception:  # noqa: BLE001
         logger.exception("strategist_sismo_enrich_failed")
 
+    # Build config · top 3 discovery_suggestions pendientes
+    try:
+        sugg_cursor = db[col.DISCOVERY_SUGGESTIONS].find(
+            {"workspace_id": workspace_id, "status": "pending"},
+            {"_id": 0, "term": 1, "category": 1, "signal_type": 1, "confidence": 1, "evidence": 1},
+        ).sort([("confidence", -1), ("date", -1)]).limit(3)
+        s.discovery_suggestions = await sugg_cursor.to_list(length=3)
+    except Exception:  # noqa: BLE001
+        logger.exception("strategist_discovery_query_failed")
+
     # Build 3.2 · enriquecimiento semántico via Qdrant si MemoryAgent disponible
     if memory_agent is not None:
         try:
@@ -324,6 +337,7 @@ async def gather_signals(
             "related_ads": len(s.related_ads),
             "inventory_total_skus": s.inventory_summary.get("total_skus", 0),
             "slow_movers": len(s.slow_movers),
+            "discovery_suggestions": len(s.discovery_suggestions),
         },
     )
     return s

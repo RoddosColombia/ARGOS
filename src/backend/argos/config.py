@@ -31,7 +31,16 @@ class Settings(BaseSettings):
     admin_role: str = Field(default="ceo", alias="ADMIN_ROLE")
     admin_workspace_id: str = Field(default="RODDOS", alias="ADMIN_WORKSPACE_ID")
 
-    cors_origins: str = Field(default="", alias="ARGOS_CORS_ORIGINS")
+    # Default sano que incluye dominio público + dev local. Si Render NO propaga
+    # ARGOS_CORS_ORIGINS, este fallback evita que el frontend rompa con CORS.
+    # Override en Render con la lista exacta cuando se agreguen dominios.
+    cors_origins: str = Field(
+        default=(
+            "http://localhost:5173,http://localhost:3000,"
+            "https://argos.roddos.com"
+        ),
+        alias="ARGOS_CORS_ORIGINS",
+    )
 
     disable_scheduler: bool = Field(default=False, alias="ARGOS_DISABLE_SCHEDULER")
 

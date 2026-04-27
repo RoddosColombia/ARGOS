@@ -83,6 +83,15 @@ ALL_BUILD_4_2: tuple[str, ...] = (
     SISMO_SALES_DAILY,
 )
 
+# ─── Build config-intelligence ───────────────────────────────────────────
+CATEGORIES = "categories"
+DISCOVERY_SUGGESTIONS = "discovery_suggestions"
+
+ALL_BUILD_CONFIG: tuple[str, ...] = (
+    CATEGORIES,
+    DISCOVERY_SUGGESTIONS,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -95,4 +104,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_3_3
     + ALL_BUILD_4_1
     + ALL_BUILD_4_2
+    + ALL_BUILD_CONFIG
 )

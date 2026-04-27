@@ -412,6 +412,66 @@ Snapshot diario de ventas leído de SISMO V2 vía `sync_sismo_sales_daily_job` (
 - `Strategist.impact._aggregate_real_sales_window` para poblar `actual_impact` con `units_sold + revenue_cop` reales en recomendaciones de tipo `pricing_change` o `promo_launch` (ventana T..T+7 desde `executed_at`).
 - Endpoint `GET /api/v1/sismo/sales?date=YYYY-MM-DD&sku=optional` para la vista `/sismo > Ventas`.
 
+## Colección: categories (Build config · catálogo de verticales)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | ROG-A3 |
+| slug | string | clave canónica · ej. `repuestos_moto`, `accesorios_moto` |
+| label | string | nombre legible |
+| active | bool | si está `true`, `discovery_job` corre los 3 métodos para esta categoría |
+| created_at | datetime | |
+| updated_at | datetime | |
+
+Índices: `(workspace_id, slug)` **unique** · `(workspace_id, active)`
+
+**Seed**: 4 categorías defaults · `repuestos_moto` (active=True), `accesorios_moto/motos/aceites_lubricantes` (active=False).
+
+**Endpoints**: `GET /api/v1/config/categories` · `PATCH /api/v1/config/categories/{slug}` · `POST /api/v1/config/categories/request` (emite `config.category.requested`).
+
+## Colección: discovery_suggestions (Build config · auto-discovery)
+
+Sugerencias generadas por `DiscoveryAgent.run_discovery_job` (cron 06:00 UTC) · upsert idempotente por `(workspace, category, term, signal_type, date)`.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | |
+| category | string | slug de `categories` |
+| term | string | candidato a watch_query |
+| signal_type | enum | `trending` / `rising` / `liquidating` / `disappearing` |
+| confidence | float 0.0-1.0 | mayor = más fuerte la señal |
+| evidence | object | `{metric, value, delta_pct}` · texto natural en frontend |
+| date | string YYYY-MM-DD | día del run · clave del unique compound |
+| status | enum | `pending` / `accepted` / `dismissed` |
+| accepted_by, accepted_at | string/datetime | poblados al aceptar (crea watch_query origin='suggested') |
+| dismissed_by, dismissed_at, dismiss_reason | string/datetime/string | poblados al descartar |
+| created_at, updated_at | datetime | |
+
+Índices:
+- `(workspace_id, category, term, signal_type, date)` **unique** — `workspace_cat_term_signal_date_unique`
+- `(workspace_id, status, confidence desc)` — `workspace_status_confidence`
+- `(workspace_id, date desc)` — `workspace_date_desc`
+
+**Consumido por**: `Strategist.gather_signals` lee top 3 con `status=pending` para inyectar en el contexto del Morning Briefing · permite que el LLM mencione "ARGOS detectó N términos emergentes que no estás monitoreando".
+
+## Extensión `watch_queries` (Build config · panel de inteligencia)
+
+Campos nuevos sobre el schema Build 1.1:
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| origin | enum | `manual` / `suggested` / `auto_discovered` · cómo entró al sistema. Legacy docs migran a `manual` |
+| category | string \| null | slug de `categories` · null para queries pre-Build config |
+| status | enum | `active` / `paused` · alias canónico de `activa: bool` (sync'd) |
+| priority | int 1-10 | alias canónico de `prioridad` (sync'd) |
+| suggested_from | string | ObjectId de `discovery_suggestions._id` cuando `origin=suggested` |
+
+**Migración**: `ensure_indexes` corre backfill que setea `origin/status/priority/category` con defaults para docs legacy. Idempotente.
+
+**Decisión arquitectónica**: el campo `source` (existente Build 1.1 con valores `meli/fb_marketplace/all`) se mantiene · NO se reusa para el origen del query como pedía el spec original. El nuevo concepto se llama `origin` para evitar romper Scout.
+
 ## Colección: campaigns
 
 | Campo | Tipo | Notas |

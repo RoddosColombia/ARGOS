@@ -409,6 +409,54 @@ async def publish_sismo_inventory_synced(
     )
 
 
+# ─── Helpers Build config-intelligence ────────────────────────────────────
+
+
+async def publish_discovery_suggestions_generated(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    category: str,
+    counts: dict[str, int],
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """`counts` contiene {trending, rising, liquidating, disappearing, total}."""
+    return await publish_event(
+        db,
+        event_type="discovery.suggestions.generated",
+        workspace_id=workspace_id,
+        producer="discovery_agent",
+        payload={
+            "category": category,
+            "counts": counts,
+        },
+        correlation_id=correlation_id,
+    )
+
+
+async def publish_category_requested(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    requested_by: str,
+    label: str,
+    note: str = "",
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="config.category.requested",
+        workspace_id=workspace_id,
+        producer="config_api",
+        payload={
+            "requested_by": requested_by[:200],
+            "label": label[:200],
+            "note": note[:300],
+        },
+        correlation_id=correlation_id,
+    )
+
+
 async def publish_sismo_sales_daily_synced(
     db: AsyncIOMotorDatabase,
     *,

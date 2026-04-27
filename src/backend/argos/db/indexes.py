@@ -324,6 +324,23 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── scoring_solicitudes (Phase 2 · Score Engine) ────────────────────────
+    created[col.SCORING_SOLICITUDES] = await db[col.SCORING_SOLICITUDES].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("solicitud_id", ASCENDING)],
+            name="workspace_solicitud_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("created_at", DESCENDING)],
+            name="workspace_created_desc",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)],
+            name="workspace_decision_created",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

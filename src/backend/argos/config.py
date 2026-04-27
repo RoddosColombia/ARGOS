@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     twilio_whatsapp_from: str = Field(default="", alias="TWILIO_WHATSAPP_FROM")
     twilio_whatsapp_to: str = Field(default="", alias="TWILIO_WHATSAPP_TO")
 
+    # Score Engine partners · Phase 2
+    riskseal_api_key: str = Field(default="", alias="RISKSEAL_API_KEY")
+    auco_api_key: str = Field(default="", alias="AUCO_API_KEY")
+    palenca_api_key: str = Field(default="", alias="PALENCA_API_KEY")
+    score_engine_version: str = Field(default="v0.1.0-manual", alias="SCORE_ENGINE_VERSION")
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Lista de orígenes permitidos, defensiva en profundidad.

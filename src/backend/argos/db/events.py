@@ -482,6 +482,37 @@ async def publish_sismo_sales_daily_synced(
     )
 
 
+# ─── Helpers Phase 2 · Score Engine ───────────────────────────────────────
+
+
+async def publish_score_evaluated(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    solicitud_id: str,
+    decision: str,
+    score_final: int,
+    engine_version: str,
+    regla_dura_aplicada: str | None = None,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """ROG-S5: persiste engine_version en metadata para auditoría."""
+    return await publish_event(
+        db,
+        event_type="score.evaluated",
+        workspace_id=workspace_id,
+        producer="score_engine",
+        payload={
+            "solicitud_id": solicitud_id,
+            "decision": decision,
+            "score_final": int(score_final),
+            "regla_dura_aplicada": regla_dura_aplicada,
+        },
+        metadata={"engine_version": engine_version},
+        correlation_id=correlation_id,
+    )
+
+
 async def publish_recommendation_evaluated(
     db: AsyncIOMotorDatabase,
     *,

@@ -46,7 +46,7 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | score.hard_rules.evaluated | score_engine | strategist | {solicitud_id, rechazo_inmediato: bool, regla_violada} |
 | score.ml.calculated | score_engine | audit_log | {solicitud_id, score_modelo, model_hash, features_used} |
 | score.claude.adjusted | score_engine | audit_log | {solicitud_id, ajuste, narrativa, tokens_usados} |
-| score.evaluated | score_engine | whatsapp_agent, sismo_sync, dashboard | {solicitud_id, score_final, categoria, decision, monto_aprobado} |
+| score.evaluated | score_engine | whatsapp_agent, sismo_sync, dashboard | {solicitud_id, decision (aprobado/rechazado/rechazado_regla_dura/revision_manual), score_final 0-1000, regla_dura_aplicada nullable} · `metadata.engine_version` pineado para auditoría (ROG-S5) · emitido por `ScoreEngine.evaluate` tras persistir en `scoring_solicitudes` · Phase 2+ |
 | score.notified | whatsapp_agent | audit_log | {solicitud_id, notification_method: whatsapp, delivered: bool} |
 
 ### Dominio: Cobranza (RADAR + Wava)

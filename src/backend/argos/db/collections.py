@@ -92,6 +92,13 @@ ALL_BUILD_CONFIG: tuple[str, ...] = (
     DISCOVERY_SUGGESTIONS,
 )
 
+# ─── Phase 2 · Score Engine ──────────────────────────────────────────────
+SCORING_SOLICITUDES = "scoring_solicitudes"
+
+ALL_PHASE_2: tuple[str, ...] = (
+    SCORING_SOLICITUDES,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -105,4 +112,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_4_1
     + ALL_BUILD_4_2
     + ALL_BUILD_CONFIG
+    + ALL_PHASE_2
 )

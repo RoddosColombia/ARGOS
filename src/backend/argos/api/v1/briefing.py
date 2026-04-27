@@ -1,10 +1,11 @@
-"""API briefing · GET /today + GET /history."""
+"""API briefing · GET /today + GET /history + GET /by-date/{fecha}."""
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from argos.auth.deps import require_role
 from argos.auth.schemas import UserOut
@@ -71,3 +72,31 @@ async def briefing_history(
     )
     docs = await cursor.to_list(length=limit)
     return [_serialize(d) for d in docs]
+
+
+@router.get("/by-date/{fecha}")
+async def briefing_by_date(
+    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    fecha: Annotated[
+        str,
+        Path(pattern=r"^\d{4}-\d{2}-\d{2}$", description="YYYY-MM-DD"),
+    ],
+) -> dict[str, Any]:
+    """Devuelve el briefing de una fecha específica · 404 si no existe.
+
+    Build market-intelligence-complete · soporta el selector de fecha del
+    historial navegable en el frontend.
+    """
+    _ensure_mongo()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha):
+        raise HTTPException(status_code=400, detail="Formato fecha inválido · YYYY-MM-DD")
+    db = get_database()
+    doc = await db[col.BRIEFINGS].find_one(
+        {"workspace_id": user.workspace_id, "fecha": fecha}
+    )
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Sin briefing para {fecha}",
+        )
+    return _serialize(doc)

@@ -19,6 +19,7 @@ from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.discovery.service import run_discovery_job
 from argos.agents.executive.service import run_morning_briefing
 from argos.agents.memory.service import embed_pending_job
+from argos.agents.notifications.service import notify_recent_price_alerts
 from argos.agents.scout.service import tick as scout_tick
 from argos.agents.sismo.service import (
     sync_sismo_inventory_job,
@@ -127,6 +128,14 @@ async def _discovery_job(db: AsyncIOMotorDatabase) -> None:
         })
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_discovery_failed")
+
+
+async def _price_alert_whatsapp_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await notify_recent_price_alerts(db)
+        logger.info("scheduled_price_alert_whatsapp", extra=stats)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_price_alert_whatsapp_failed")
 
 
 async def _impact_evaluation_job(db: AsyncIOMotorDatabase) -> None:
@@ -254,13 +263,28 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         coalesce=True,
     )
 
-    # Morning Briefing · diario 06:45 UTC (después de scout/trends/social/alerts)
+    # Morning Briefing · diario 11:00 UTC = 06:00 AM Bogotá (GMT-5)
+    # Build market-intelligence-complete: hora ajustada para WhatsApp delivery
+    # cuando el CEO está despertando · antes era 06:45 UTC = 01:45 AM local.
     scheduler.add_job(
         _morning_briefing_job,
         args=[db],
-        trigger=CronTrigger(hour=6, minute=45),
+        trigger=CronTrigger(hour=11, minute=0),
         id="morning_briefing",
-        name="Morning Briefing · Strategist + Executive · Sonnet 4.6",
+        name="Morning Briefing · Strategist + Executive + WhatsApp · 06:00 AM Bogotá",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Price alert WhatsApp · cada 30 min escanea eventos marketplace.price.alert
+    # con drop ≥ 15% sin notificar todavía · entrega WhatsApp casi en tiempo real
+    scheduler.add_job(
+        _price_alert_whatsapp_job,
+        args=[db],
+        trigger=IntervalTrigger(minutes=30),
+        id="price_alert_whatsapp",
+        name="Price alert WhatsApp · drops ≥ 15% via Twilio",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

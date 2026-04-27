@@ -40,6 +40,13 @@ class WorkspaceIdMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable],
     ):
+        # CORS preflight: el browser NUNCA envía X-Workspace-Id en OPTIONS.
+        # Si bloqueamos aquí, el preflight muere antes de llegar al CORSMiddleware
+        # y el browser ve un 400 sin headers Access-Control-Allow-Origin.
+        # Pasamos el OPTIONS sin validar; el CORSMiddleware lo responde correctamente.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         path = request.url.path
         if any(path.startswith(prefix) for prefix in self._exempt_prefixes):
             return await call_next(request)

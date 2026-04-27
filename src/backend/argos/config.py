@@ -59,9 +59,24 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        if not self.cors_origins:
-            return []
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        """Lista de orígenes permitidos, defensiva en profundidad.
+
+        Combina el valor de ARGOS_CORS_ORIGINS (que puede venir de OS env, `.env`,
+        o el default del Field) con un safety set que SIEMPRE incluye los hosts
+        canónicos · evita romper producción si el env var llega vacío o stale.
+        """
+        # Siempre presentes: dominio público + dev local. ROG-A11 (aislamiento
+        # de blast radius) no se viola: estos hosts son ARGOS, no SISMO.
+        safety_net = {
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://argos.roddos.com",
+        }
+        from_env = {
+            o.strip() for o in (self.cors_origins or "").split(",") if o.strip()
+        }
+        merged = sorted(safety_net | from_env)
+        return merged
 
 
 @lru_cache

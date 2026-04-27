@@ -264,3 +264,20 @@ Mapa de integraciones con partners externos. Cada partner tiene endpoints, auten
 | Costo proyectado | $130-150 USD/mes en operación normal con caching activo |
 | Fallback | Si cae: agentes pasan a modo degradado · Compliance Officer pausa todas las acciones que muevan dinero |
 | Dueño | ARGOS desde Phase 0 |
+
+## SISMO V2 (Build 4.1 · ERP RODDOS · read-only)
+
+| Campo | Valor |
+|-------|-------|
+| Función | Fuente de verdad de inventario (`/api/inventory/repuestos`, `/api/inventory/slow_movers`), ventas (`/api/sales/daily?date=YYYY-MM-DD`) y eventualmente loanbook · ARGOS solo CONSUME read-only |
+| Estado | Build 4.1 lectura activa · escritura sigue siendo dominio del admin web (ROG-A11) |
+| Criticidad | Alta (alimenta `Strategist.gather_signals` con contexto de inventario · sin sync el LLM no puede recomendar liquidaciones) |
+| Auth | `Authorization: Bearer {SISMO_API_KEY}` · key con SCOPE READ-ONLY (CEO emite key dedicada para ARGOS · ROG-A11) |
+| Base URL | `SISMO_API_URL` (variable env · ej. `https://sismo.roddos.internal`) |
+| Endpoints consumidos | `GET /api/inventory/repuestos` → lista SKUs · `GET /api/inventory/slow_movers` → SKUs ≥45d sin rotación · `GET /api/sales/daily?date=YYYY-MM-DD` → ventas día por SKU |
+| Cliente | `argos/partners/sismo/client.py` · `SismoClient` async context manager con httpx · skip silencioso si URL+KEY vacíos · parser defensivo acepta `[...]` directo o `{items|data|results: [...]}` |
+| Persistencia | Snapshot diario en colección `sismo_inventory` · idempotente por `(workspace_id, sku, fecha_sync_date)` |
+| Eventos producidos | `sismo.inventory.synced` (Build 4.1) tras cada sync exitoso |
+| Rate limits | Documentados en lado SISMO · cliente aplica `timeout=30s` y propaga 429 como `SismoError(429)` |
+| Fallback | Si SISMO cae: el job loguea `SismoError` y skipa el día · el último snapshot sigue siendo accesible vía `/api/v1/sismo/inventory` (read sobre Mongo, no llama SISMO en runtime) |
+| Dueño | RODDOS S.A.S. (admin web) · ARGOS es consumidor |

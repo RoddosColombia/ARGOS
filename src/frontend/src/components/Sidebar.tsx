@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { label: "Trends & Alertas", to: "/trends", phase: "Phase 1", enabled: true },
   { label: "Competidores", to: "/competitors", phase: "Phase 2", enabled: true },
   { label: "Social Listening", to: "/social", phase: "Phase 2", enabled: true },
+  { label: "Inventario SISMO", to: "/sismo", phase: "Phase 4", enabled: true },
   { label: "Scoring", to: "/scoring", phase: "Phase 2", enabled: false },
   { label: "WhatsApp", to: "/whatsapp", phase: "Phase 3", enabled: false },
   { label: "Cobranza", to: "/cobranza", phase: "Phase 4", enabled: false },

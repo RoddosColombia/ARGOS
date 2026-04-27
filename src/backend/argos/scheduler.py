@@ -19,6 +19,7 @@ from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.executive.service import run_morning_briefing
 from argos.agents.memory.service import embed_pending_job
 from argos.agents.scout.service import tick as scout_tick
+from argos.agents.sismo.service import sync_sismo_inventory_job
 from argos.agents.social.service import refresh_social
 from argos.agents.strategist.impact import evaluate_pending_recommendations
 from argos.agents.trends.service import refresh_trends
@@ -95,6 +96,14 @@ async def _memory_embed_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_memory_embed", extra=stats)
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_memory_embed_failed")
+
+
+async def _sismo_sync_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await sync_sismo_inventory_job(db)
+        logger.info("scheduled_sismo_sync", extra=stats.as_dict())
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_sismo_sync_failed")
 
 
 async def _impact_evaluation_job(db: AsyncIOMotorDatabase) -> None:
@@ -181,6 +190,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=CronTrigger(hour=4, minute=0),
         id="social_refresh",
         name="Social refresh · TikHub IG/TikTok cuentas + posts virales",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # SISMO V2 inventory sync · cada 6h (snapshot diario aprovecha la idempotencia)
+    scheduler.add_job(
+        _sismo_sync_job,
+        args=[db],
+        trigger=IntervalTrigger(hours=6),
+        id="sismo_sync",
+        name="SISMO V2 sync · inventario read-only · upsert por (sku, fecha)",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

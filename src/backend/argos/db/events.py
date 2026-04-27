@@ -385,6 +385,30 @@ async def publish_recommendation_rejected(
     )
 
 
+# ─── Helpers Build 4.1 (SISMO V2 read-only) ──────────────────────────────
+
+
+async def publish_sismo_inventory_synced(
+    db: AsyncIOMotorDatabase,
+    *,
+    workspace_id: str,
+    total_skus: int,
+    slow_count: int,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return await publish_event(
+        db,
+        event_type="sismo.inventory.synced",
+        workspace_id=workspace_id,
+        producer="sismo_agent",
+        payload={
+            "total_skus": int(total_skus),
+            "slow_count": int(slow_count),
+        },
+        correlation_id=correlation_id,
+    )
+
+
 async def publish_recommendation_evaluated(
     db: AsyncIOMotorDatabase,
     *,

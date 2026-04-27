@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(default="", alias="QDRANT_URL")
     qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
 
+    # SISMO V2 · Build 4.1 (read-only)
+    sismo_api_url: str = Field(default="", alias="SISMO_API_URL")
+    sismo_api_key: str = Field(default="", alias="SISMO_API_KEY")
+
     @property
     def cors_origin_list(self) -> list[str]:
         if not self.cors_origins:

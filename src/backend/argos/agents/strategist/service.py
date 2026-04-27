@@ -218,6 +218,9 @@ class _Signals:
     # disponible, contiene productos y ads similares a las señales detectadas.
     related_products: list[dict[str, Any]] = field(default_factory=list)
     related_ads: list[dict[str, Any]] = field(default_factory=list)
+    # Build 4.1: contexto de inventario desde SISMO V2 (snapshot del día).
+    inventory_summary: dict[str, Any] = field(default_factory=dict)
+    slow_movers: list[dict[str, Any]] = field(default_factory=list)
 
     def to_user_payload(self) -> dict[str, Any]:
         return {
@@ -229,6 +232,8 @@ class _Signals:
             "new_social_accounts": self.new_social_accounts,
             "related_products": self.related_products,
             "related_ads": self.related_ads,
+            "inventory_summary": self.inventory_summary,
+            "slow_movers": self.slow_movers,
         }
 
 
@@ -293,6 +298,12 @@ async def gather_signals(
     ).sort("relevancia_score", -1).limit(10)
     s.new_social_accounts = await cursor.to_list(length=10)
 
+    # Build 4.1 · contexto de inventario SISMO (snapshot del día actual)
+    try:
+        await _enrich_with_sismo_inventory(s, db, workspace_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("strategist_sismo_enrich_failed")
+
     # Build 3.2 · enriquecimiento semántico via Qdrant si MemoryAgent disponible
     if memory_agent is not None:
         try:
@@ -311,9 +322,60 @@ async def gather_signals(
             "new_social_accounts": len(s.new_social_accounts),
             "related_products": len(s.related_products),
             "related_ads": len(s.related_ads),
+            "inventory_total_skus": s.inventory_summary.get("total_skus", 0),
+            "slow_movers": len(s.slow_movers),
         },
     )
     return s
+
+
+async def _enrich_with_sismo_inventory(
+    s: _Signals, db: AsyncIOMotorDatabase, workspace_id: str
+) -> None:
+    """Lee el snapshot más reciente de `sismo_inventory` y agrega contexto.
+
+    Build 4.1: aggregate sobre el último `fecha_sync_date` por workspace.
+    `inventory_summary` resume totales (skus, stock_units, slow_count, valor inv).
+    `slow_movers` top 10 SKUs con mayor `dias_inventario` (>= 45d) para que el
+    Strategist genere acciones de liquidación o promo cuando aplique.
+    """
+    pipeline_latest = [
+        {"$match": {"workspace_id": workspace_id}},
+        {"$group": {"_id": None, "max_date": {"$max": "$fecha_sync_date"}}},
+    ]
+    latest_docs = await db[col.SISMO_INVENTORY].aggregate(pipeline_latest).to_list(length=1)
+    if not latest_docs or not latest_docs[0].get("max_date"):
+        return
+    latest_date = latest_docs[0]["max_date"]
+
+    summary_pipeline = [
+        {"$match": {"workspace_id": workspace_id, "fecha_sync_date": latest_date}},
+        {
+            "$group": {
+                "_id": None,
+                "total_skus": {"$sum": 1},
+                "stock_units": {"$sum": "$stock"},
+                "slow_count": {"$sum": {"$cond": ["$is_slow_mover", 1, 0]}},
+                "valor_inventario": {"$sum": {"$multiply": ["$stock", "$costo"]}},
+            }
+        },
+    ]
+    summary_docs = await db[col.SISMO_INVENTORY].aggregate(summary_pipeline).to_list(length=1)
+    if summary_docs:
+        d = summary_docs[0]
+        s.inventory_summary = {
+            "fecha_sync": latest_date,
+            "total_skus": int(d.get("total_skus") or 0),
+            "stock_units": int(d.get("stock_units") or 0),
+            "slow_count": int(d.get("slow_count") or 0),
+            "valor_inventario_cop": round(float(d.get("valor_inventario") or 0), 2),
+        }
+
+    cursor = db[col.SISMO_INVENTORY].find(
+        {"workspace_id": workspace_id, "fecha_sync_date": latest_date, "is_slow_mover": True},
+        {"_id": 0, "sku": 1, "nombre": 1, "stock": 1, "precio": 1, "dias_inventario": 1},
+    ).sort("dias_inventario", -1).limit(10)
+    s.slow_movers = await cursor.to_list(length=10)
 
 
 async def _enrich_with_memory(s: _Signals, memory_agent: Any, workspace_id: str) -> None:

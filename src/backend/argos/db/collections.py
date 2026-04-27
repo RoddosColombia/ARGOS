@@ -69,6 +69,13 @@ ALL_BUILD_3_3: tuple[str, ...] = (
     RECOMMENDATIONS,
 )
 
+# ─── Build 4.1 ───────────────────────────────────────────────────────────
+SISMO_INVENTORY = "sismo_inventory"
+
+ALL_BUILD_4_1: tuple[str, ...] = (
+    SISMO_INVENTORY,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -79,4 +86,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_2_3
     + ALL_BUILD_3_1
     + ALL_BUILD_3_3
+    + ALL_BUILD_4_1
 )

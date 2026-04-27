@@ -7,6 +7,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
 import { RecommendationsPage } from "@/pages/RecommendationsPage";
+import { SismoPage } from "@/pages/SismoPage";
 import { SocialPage } from "@/pages/SocialPage";
 import { TrendsPage } from "@/pages/TrendsPage";
 
@@ -78,6 +79,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <RecommendationsPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/sismo",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <SismoPage />
         </Layout>
       </ProtectedRoute>
     ),

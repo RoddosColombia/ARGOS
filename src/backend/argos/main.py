@@ -16,6 +16,7 @@ from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.memory import router as memory_router
 from argos.api.v1.recommendations import router as recommendations_router
 from argos.api.v1.scout import router as scout_router
+from argos.api.v1.sismo import router as sismo_router
 from argos.api.v1.social import router as social_router
 from argos.api.v1.trends import router as trends_router
 from argos.auth.router import router as auth_router
@@ -93,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(briefing_router)
     app.include_router(memory_router)
     app.include_router(recommendations_router)
+    app.include_router(sismo_router)
 
     return app
 

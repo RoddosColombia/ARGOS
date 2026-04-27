@@ -355,6 +355,35 @@ Morning Briefings generados por StrategistAgent + persistidos por ExecutiveAgent
 - `ejecutada` → manual (o futuro Media Buyer) marca `executed_at`
 - `evaluada` → impact evaluation job (cron 07:00 UTC) lee `status=ejecutada` con `executed_at` ≥ 7d, calcula `hit_rate_contribution`, genera `learning` con Sonnet 4.6, persiste `actual_impact` + `evaluated_at`
 
+## Colección: sismo_inventory (Build 4.1 · snapshot read-only)
+
+Snapshot diario del inventario leído de SISMO V2 vía `SismoAgent.sync_sismo_inventory_job` (cron 6h). Idempotente por `(workspace_id, sku, fecha_sync_date)`.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | ROG-A3 |
+| sku | string | clave canónica del repuesto en SISMO |
+| nombre | string | descripción ≤200 chars |
+| stock | int | unidades en bodega al momento del sync |
+| precio | float | precio de venta COP |
+| costo | float | costo unitario COP (para `valor_inventario` agregado) |
+| dias_inventario | int | días sin rotación según SISMO |
+| is_slow_mover | bool | `True` si `dias_inventario >= 45` (umbral hardcoded · ver `SLOW_MOVER_DAYS_THRESHOLD`) |
+| fecha_sync_date | string YYYY-MM-DD | clave del snapshot · permite múltiples días en histórico |
+| fecha_sync | datetime UTC | timestamp exacto del sync |
+| created_at | datetime | `$setOnInsert` |
+| updated_at | datetime | refrescado en re-runs del mismo día |
+
+Índices (Build 4.1):
+- `(workspace_id, sku, fecha_sync_date)` **unique** — `workspace_sku_fecha_unique` (idempotencia del sync job)
+- `(workspace_id, fecha_sync desc)` — `workspace_fecha_sync_desc` (driver del endpoint /sismo/inventory)
+- `(workspace_id, is_slow_mover, dias_inventario desc)` — `workspace_slow_movers` (filtro `type=slow_movers`)
+
+**Skip silencioso**: si `SISMO_API_URL`/`SISMO_API_KEY` no están seteadas, `sync_sismo_inventory_job` no toca Mongo y devuelve `SyncStats(enabled=False)`. ROG-A11: la key debe ser scope read-only.
+
+**Consumido por**: `Strategist.gather_signals` (Build 4.1) lee el último snapshot por workspace y enriquece el briefing con `inventory_summary` (totales + valor inventario) y top 10 `slow_movers` para que el LLM proponga acciones de liquidación.
+
 ## Colección: campaigns
 
 | Campo | Tipo | Notas |

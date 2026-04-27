@@ -222,6 +222,23 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── sismo_inventory (Build 4.1 · SISMO V2 read-only) ────────────────────
+    created[col.SISMO_INVENTORY] = await db[col.SISMO_INVENTORY].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("sku", ASCENDING), ("fecha_sync_date", ASCENDING)],
+            name="workspace_sku_fecha_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("fecha_sync", DESCENDING)],
+            name="workspace_fecha_sync_desc",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("is_slow_mover", ASCENDING), ("dias_inventario", DESCENDING)],
+            name="workspace_slow_movers",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

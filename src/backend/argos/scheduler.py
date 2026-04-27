@@ -19,7 +19,10 @@ from argos.agents.competitors.meta_ads_service import refresh_meta_ads
 from argos.agents.executive.service import run_morning_briefing
 from argos.agents.memory.service import embed_pending_job
 from argos.agents.scout.service import tick as scout_tick
-from argos.agents.sismo.service import sync_sismo_inventory_job
+from argos.agents.sismo.service import (
+    sync_sismo_inventory_job,
+    sync_sismo_sales_daily_job,
+)
 from argos.agents.social.service import refresh_social
 from argos.agents.strategist.impact import evaluate_pending_recommendations
 from argos.agents.trends.service import refresh_trends
@@ -104,6 +107,14 @@ async def _sismo_sync_job(db: AsyncIOMotorDatabase) -> None:
         logger.info("scheduled_sismo_sync", extra=stats.as_dict())
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_sismo_sync_failed")
+
+
+async def _sismo_sales_sync_job(db: AsyncIOMotorDatabase) -> None:
+    try:
+        stats = await sync_sismo_sales_daily_job(db)
+        logger.info("scheduled_sismo_sales_sync", extra=stats.as_dict())
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_sismo_sales_sync_failed")
 
 
 async def _impact_evaluation_job(db: AsyncIOMotorDatabase) -> None:
@@ -202,6 +213,18 @@ def build_scheduler(db: AsyncIOMotorDatabase, *, env: str) -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=6),
         id="sismo_sync",
         name="SISMO V2 sync · inventario read-only · upsert por (sku, fecha)",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # SISMO V2 sales daily sync · diario 01:00 UTC (descarga ventas del día anterior)
+    scheduler.add_job(
+        _sismo_sales_sync_job,
+        args=[db],
+        trigger=CronTrigger(hour=1, minute=0),
+        id="sismo_sales_sync",
+        name="SISMO V2 sales daily · ventas del día anterior",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

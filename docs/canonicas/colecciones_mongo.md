@@ -384,6 +384,34 @@ Snapshot diario del inventario leído de SISMO V2 vía `SismoAgent.sync_sismo_in
 
 **Consumido por**: `Strategist.gather_signals` (Build 4.1) lee el último snapshot por workspace y enriquece el briefing con `inventory_summary` (totales + valor inventario) y top 10 `slow_movers` para que el LLM proponga acciones de liquidación.
 
+## Colección: sismo_sales_daily (Build 4.2 · ventas diarias por SKU)
+
+Snapshot diario de ventas leído de SISMO V2 vía `sync_sismo_sales_daily_job` (cron 01:00 UTC). Una fila por (date, sku). Alimenta el impact tracker para evaluar `pricing_change`/`promo_launch` con números reales.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | |
+| workspace_id | string | ROG-A3 |
+| date | string YYYY-MM-DD | día de venta · clave temporal |
+| sku | string | SKU canónico de SISMO |
+| units_sold | int | unidades vendidas en el día |
+| revenue | float | revenue COP del día para ese SKU |
+| channel | string | tienda/whatsapp/web/n.a. (≤50 chars) |
+| fecha_sync | datetime UTC | timestamp del sync |
+| created_at | datetime | `$setOnInsert` |
+| updated_at | datetime | refrescado en re-runs |
+
+Índices (Build 4.2):
+- `(workspace_id, date, sku)` **unique** — `workspace_date_sku_unique` (idempotencia del job)
+- `(workspace_id, date desc)` — `workspace_date_desc` (driver del endpoint /sismo/sales · default último día)
+- `(workspace_id, sku, date desc)` — `workspace_sku_date_desc` (queries por SKU en ventana temporal · usado por impact tracker)
+
+**Skip silencioso**: si `SISMO_API_URL`/`SISMO_API_KEY` vacíos → `SalesSyncStats(enabled=False)`, no toca Mongo.
+
+**Consumido por**:
+- `Strategist.impact._aggregate_real_sales_window` para poblar `actual_impact` con `units_sold + revenue_cop` reales en recomendaciones de tipo `pricing_change` o `promo_launch` (ventana T..T+7 desde `executed_at`).
+- Endpoint `GET /api/v1/sismo/sales?date=YYYY-MM-DD&sku=optional` para la vista `/sismo > Ventas`.
+
 ## Colección: campaigns
 
 | Campo | Tipo | Notas |

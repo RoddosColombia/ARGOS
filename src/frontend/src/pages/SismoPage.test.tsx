@@ -100,4 +100,55 @@ describe("SismoPage", () => {
     expect(within(t2).getByText("ACEITE-002")).toBeInTheDocument();
     expect(within(t2).queryByText("FRENO-001")).not.toBeInTheDocument();
   });
+
+  it("tab Ventas renderiza totales + tabla de ventas", async () => {
+    const SALES = {
+      date: "2026-04-25",
+      sku: null,
+      items: [
+        {
+          sku: "FRENO-001",
+          date: "2026-04-25",
+          units_sold: 5,
+          revenue: 225000,
+          channel: "tienda",
+          fecha_sync: "2026-04-26T01:00:00Z",
+        },
+        {
+          sku: "ACEITE-002",
+          date: "2026-04-25",
+          units_sold: 3,
+          revenue: 156000,
+          channel: "whatsapp",
+          fecha_sync: "2026-04-26T01:00:00Z",
+        },
+      ],
+      totals: { units_sold: 8, revenue_cop: 381000, count: 2 },
+    };
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/sismo/sales")) {
+        return new Response(JSON.stringify(SALES), { status: 200 });
+      }
+      return new Response(JSON.stringify(ALL), { status: 200 });
+    }) as typeof fetch;
+
+    renderPage();
+
+    // Cambiar a tab Ventas
+    fireEvent.click(screen.getByRole("button", { name: /^Ventas$/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sales-table")).toBeInTheDocument();
+    });
+    const totals = screen.getByTestId("sales-totals");
+    expect(within(totals).getByText("2026-04-25")).toBeInTheDocument();
+    expect(within(totals).getByText("8")).toBeInTheDocument();
+
+    const table = screen.getByTestId("sales-table");
+    expect(within(table).getAllByTestId("sales-row")).toHaveLength(2);
+    expect(within(table).getByText("FRENO-001")).toBeInTheDocument();
+    expect(within(table).getByText("whatsapp")).toBeInTheDocument();
+  });
 });

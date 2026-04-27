@@ -71,3 +71,53 @@ Conectar ARGOS al ERP existente (SISMO V2) en modo read-only para que el Strateg
 - Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
 - Rama: `phase-4/build-4.1-sismo-integration` → PR a `main`
 - Próximo build: **4.2** — sync de ventas diarias (`/api/sales/daily`) + colección `sismo_sales_daily` + integración con hit_rate de recomendaciones
+
+---
+
+## Build 4.2 · Ventas diarias SISMO + hit_rate real
+
+### Qué se construyó
+
+- **Sync de ventas diarias** · `sync_sismo_sales_daily_job(db, workspace_id, fecha=None, agent=None)` en `agents/sismo/service.py`. Default `fecha = ayer UTC` (job corre 01:00 UTC → procesa el día completo anterior). Idempotente por `(workspace_id, date, sku)` con upsert. Normalización defensiva con `_normalize_sales_item` (acepta sku/codigo, units_sold/unidades/cantidad, revenue/total/monto, date/fecha, channel/canal). Emite `sismo.sales.daily.synced`.
+- **Colección `sismo_sales_daily`** · 3 índices (unique compound + sort by date + por SKU para queries del impact tracker).
+- **Cron 01:00 UTC** · `_sismo_sales_sync_job` registrado en `scheduler.py` con `CronTrigger(hour=1, minute=0)` · llega antes del morning briefing (06:45 UTC) para que las recomendaciones del día tengan ventas frescas en el contexto futuro.
+- **Impact tracker enriquecido (Build 4.2)** · Para recomendaciones con `type ∈ {pricing_change, promo_launch}`, `evaluate_pending_recommendations` ahora llama a `_aggregate_real_sales_window(db, workspace_id, executed_at, window_days=7)` que agrega `sismo_sales_daily` en la ventana T..T+7 y devuelve `{units_sold, revenue_cop, days_with_data, sku_count, window_start, window_end}`. Si hay datos, `actual_impact` se persiste con `metric="units_sold_and_revenue"` + métricas reales en lugar del placeholder cualitativo. El `hit_rate_contribution` heurístico se preserva como `actual_impact.hit_rate_heuristic` para auditoría.
+- **`_generate_learning` enriquecido** · Recibe ahora `sales_metrics` opcional. Si vienen datos de SISMO, los inyecta en el prompt a Sonnet 4.6 con un bloque "Ventas reales SISMO en ventana 7d post-ejecución" · el modelo argumenta con números concretos en la reflexión.
+- **Endpoint API** · `GET /api/v1/sismo/sales?date=YYYY-MM-DD&sku=optional&limit=N` (require_role ceo). Si `date` no se pasa, resuelve el último día con datos del workspace. Devuelve `{date, sku, items, totals: {units_sold, revenue_cop, count}}`. NO llama a SISMO en runtime.
+- **Frontend** · `SismoPage` refactorizada con tabs `Inventario` / `Ventas`. La tab Ventas muestra 3 cards (Fecha, Unidades, Revenue) + tabla SKU/Unidades/Revenue/Canal. Refresh 5 min.
+
+### Decisiones técnicas
+
+- **Job corre 01:00 UTC, no medianoche** · Da margen de 1h para que SISMO termine de cerrar el día (timezone Bogotá, GMT-5). Si lo corriéramos a 00:00 UTC podríamos pegarle al cierre antes de que SISMO procese ventas tarde.
+- **`actual_impact` schema cambió** para `pricing_change`/`promo_launch`** · La metric pasa de `qualitative` (Build 3.3) a `units_sold_and_revenue` cuando hay datos · campos nuevos: `units_sold`, `revenue_cop`, `days_with_data`, `window_start`, `window_end`, `hit_rate_heuristic`. **Backward-compatible**: el frontend de Recommendations sólo lee `hit_rate_contribution` y `learning` que siguen poblándose. Si se quiere mostrar units_sold en `RecommendationsPage` después, leer `actual_impact.units_sold` con fallback.
+- **Workspace-wide aggregation, no por SKU** · La rec actualmente no captura `sku_affected` (Build 3.3 derivaba el `type` por regex pero no extraía SKU del action_description). Por ahora `_aggregate_real_sales_window` suma todas las ventas del workspace en la ventana — útil cuando la rec es de mercado general (ej. "bajar precio aceites" sin SKU específico). Future Build 4.3+ podrá extraer SKUs explícitos del Strategist y filtrar.
+- **`hit_rate_heuristic` preservado en actual_impact** · No reescribimos el hit_rate: si la heurística marca 1.0 pero las ventas reales fueron flat, el `learning` de Sonnet pega más fuerte la disonancia ("hit_rate=1.0 pero solo 3 unidades vendidas en 7d sugiere que el evento fue un competidor sin tracción real").
+
+### Cambios en canónicas
+
+- `docs/canonicas/colecciones_mongo.md` · sección nueva `sismo_sales_daily` con schema, 3 índices, lifecycle.
+- `docs/canonicas/eventos.md` · `sismo.sales.daily.synced` actualizado a payload real (`{date, sales_count, units_total, revenue_total_cop}`) y productor `sismo_agent`.
+
+### Errores cometidos y cómo se resolvieron
+
+Sin errores nuevos en Build 4.2. Los patrones aprendidos en 4.1 (httpx MockTransport pre-inyectado, parser defensivo, skip silencioso) se reutilizan limpiamente.
+
+### Deuda técnica generada
+
+- **Sin SKU específico en recomendaciones** · `actual_impact` agrega ventas a nivel workspace. Si la rec dice "bajar precio Aceite Motul a $52K", el agregado incluye también ventas de pastillas, cascos, etc. Aceptable porque la rec suele mover toda una categoría, pero queda DT-011 para que el Strategist (Build 4.3+ o 5.0) extraiga `sku_affected` explícito en el JSON de output.
+- **`channel` se pierde en el agregado del impact tracker** · `_aggregate_real_sales_window` suma todos los canales · si SISMO devuelve granularidad por canal (tienda/whatsapp/web), no se aprovecha en la decisión "promo funcionó en WhatsApp pero no en tienda". DT-012 · agregar breakdown por canal en futura iteración del tracker.
+- **Sin retry/backoff en `sync_sismo_sales_daily_job`** · si SISMO 503 al 01:00 UTC, perdemos el día. Aceptable porque es un job diario con bajo costo de retry manual, pero idealmente reintentar 2-3 veces con exponential backoff o re-correr el día siguiente desde el cron de inventario (que ya pasa cada 6h). DT-013.
+
+### Métricas de la fase
+
+- Tests Build 4.2: **4 backend** (3 sales sync + endpoint + 1 impact tracker con sismo_sales_daily) + **1 frontend** (tab Ventas en SismoPage)
+- Total acumulado: **141 backend + 27 frontend = 168/168 passing**
+- Lint: `ruff check` clean
+- Build frontend: 172 modules · 463 KB JS · sin warnings
+
+### Cierre
+
+#### Build 4.2 · 2026-04-26
+- Cerrado por: Andrés San Juan (CEO · approval pendiente) + Claude Code
+- Rama: `phase-4/build-4.2-sismo-sales` → PR a `main`
+- Próximo build: **4.3** — loanbook read (deriva `score_comportamental A+→E` para bypass del flujo F3) o **4.4** RADAR cobranza orchestrator

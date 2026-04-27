@@ -239,6 +239,23 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── sismo_sales_daily (Build 4.2 · ventas diarias por SKU) ──────────────
+    created[col.SISMO_SALES_DAILY] = await db[col.SISMO_SALES_DAILY].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("date", ASCENDING), ("sku", ASCENDING)],
+            name="workspace_date_sku_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("date", DESCENDING)],
+            name="workspace_date_desc",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("sku", ASCENDING), ("date", DESCENDING)],
+            name="workspace_sku_date_desc",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

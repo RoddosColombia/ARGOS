@@ -14,6 +14,25 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
     """Crea todos los índices declarados en docs/canonicas/colecciones_mongo.md para las
     colecciones de Build 0.3. Idempotente (create_indexes es no-op si ya existen)."""
 
+    # Build config: backfill de campos nuevos en watch_queries legacy.
+    # No-op si los docs ya tienen `origin`/`status`/`priority`/`category`.
+    await db[col.WATCH_QUERIES].update_many(
+        {"origin": {"$exists": False}},
+        {"$set": {"origin": "manual"}},
+    )
+    await db[col.WATCH_QUERIES].update_many(
+        {"status": {"$exists": False}},
+        [{"$set": {"status": {"$cond": [{"$eq": ["$activa", True]}, "active", "paused"]}}}],
+    )
+    await db[col.WATCH_QUERIES].update_many(
+        {"priority": {"$exists": False}},
+        [{"$set": {"priority": {"$ifNull": ["$prioridad", 1]}}}],
+    )
+    await db[col.WATCH_QUERIES].update_many(
+        {"category": {"$exists": False}},
+        {"$set": {"category": None}},
+    )
+
     created: dict[str, list[str]] = {}
 
     # ─── workspaces ──────────────────────────────────────────────────────────
@@ -97,7 +116,7 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
-    # ─── watch_queries (Build 1.1) ───────────────────────────────────────────
+    # ─── watch_queries (Build 1.1 + extensión Build config) ───────────────────
     created[col.WATCH_QUERIES] = await db[col.WATCH_QUERIES].create_indexes([
         IndexModel(
             [("workspace_id", ASCENDING), ("query", ASCENDING)],
@@ -111,6 +130,19 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         IndexModel(
             [("workspace_id", ASCENDING), ("source", ASCENDING)],
             name="workspace_source",
+        ),
+        # Build config: panel de inteligencia · queries por origen + categoría + status
+        IndexModel(
+            [("workspace_id", ASCENDING), ("origin", ASCENDING)],
+            name="workspace_origin",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("category", ASCENDING)],
+            name="workspace_category",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("status", ASCENDING), ("priority", DESCENDING)],
+            name="workspace_status_priority",
         ),
     ])
 
@@ -253,6 +285,42 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         IndexModel(
             [("workspace_id", ASCENDING), ("sku", ASCENDING), ("date", DESCENDING)],
             name="workspace_sku_date_desc",
+        ),
+    ])
+
+    # ─── categories (Build config · catálogo de categorías por workspace) ────
+    created[col.CATEGORIES] = await db[col.CATEGORIES].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("slug", ASCENDING)],
+            name="workspace_slug_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("active", ASCENDING)],
+            name="workspace_active",
+        ),
+    ])
+
+    # ─── discovery_suggestions (Build config · descubrimiento auto) ──────────
+    created[col.DISCOVERY_SUGGESTIONS] = await db[col.DISCOVERY_SUGGESTIONS].create_indexes([
+        IndexModel(
+            [
+                ("workspace_id", ASCENDING),
+                ("category", ASCENDING),
+                ("term", ASCENDING),
+                ("signal_type", ASCENDING),
+                ("date", ASCENDING),
+            ],
+            name="workspace_cat_term_signal_date_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("status", ASCENDING), ("confidence", DESCENDING)],
+            name="workspace_status_confidence",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("date", DESCENDING)],
+            name="workspace_date_desc",
         ),
     ])
 

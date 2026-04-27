@@ -110,6 +110,13 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | briefing.action.approved | executive (web UI) | strategist | {briefing_id, action_id, approved_by} |
 | briefing.action.rejected | executive (web UI) | strategist | {briefing_id, action_id, rejected_by, reason} |
 
+### Dominio: Configuración e inteligencia (Build config)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| discovery.suggestions.generated | discovery_agent | strategist, dashboard | {category, counts: {trending, rising, liquidating, disappearing, total}} · emitido por `run_discovery_job` (cron 06:00 UTC) tras correr los 3 métodos por categoría activa · una emisión por categoría · Build config+ |
+| config.category.requested | config_api | audit_log, ARGOS team | {requested_by ≤200, label ≤200, note ≤300} · emitido por `POST /api/v1/config/categories/request` cuando el CEO pide habilitar una vertical nueva · NO crea la categoría · sólo notifica · Build config+ |
+
 ### Dominio: Cross-system (ARGOS ⇄ SISMO V2)
 
 | event_type | Productor | Consumidores | Payload clave |

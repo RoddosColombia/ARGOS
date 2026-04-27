@@ -22,6 +22,11 @@ const NAV: NavItem[] = [
   { label: "Media Buyer", to: "/media-buyer", phase: "Phase 8", enabled: false },
 ];
 
+const CONFIG_NAV: { label: string; to: string }[] = [
+  { label: "Queries e inteligencia", to: "/settings/queries" },
+  { label: "Categorías", to: "/settings/categories" },
+];
+
 export function Sidebar() {
   return (
     <aside className="w-64 shrink-0 border-r border-ink-200 bg-white">
@@ -85,6 +90,28 @@ export function Sidebar() {
               </li>
             )
           )}
+        </ul>
+
+        <div className="mt-5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-ink-500">
+          Configuración
+        </div>
+        <ul className="mt-1 space-y-0.5">
+          {CONFIG_NAV.map((item) => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                className={({ isActive }) =>
+                  `block rounded-md px-3 py-2 text-sm ${
+                    isActive
+                      ? "bg-brand-50 font-medium text-brand-700"
+                      : "text-ink-700 hover:bg-ink-100"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
         </ul>
       </nav>
     </aside>

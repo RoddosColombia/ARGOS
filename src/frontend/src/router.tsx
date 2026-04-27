@@ -3,6 +3,8 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { BriefingPage } from "@/pages/BriefingPage";
 import { CompetitorsPage } from "@/pages/CompetitorsPage";
+import { ConfigCategoriesPage } from "@/pages/ConfigCategoriesPage";
+import { ConfigQueriesPage } from "@/pages/ConfigQueriesPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
@@ -89,6 +91,26 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <SismoPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/settings/queries",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ConfigQueriesPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/settings/categories",
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ConfigCategoriesPage />
         </Layout>
       </ProtectedRoute>
     ),

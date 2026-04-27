@@ -110,6 +110,46 @@ describe("BriefingPage", () => {
     });
     const empty = screen.getByTestId("briefing-empty-state");
     expect(within(empty).getByText(/Sin briefing del día/)).toBeInTheDocument();
-    expect(within(empty).getByText(/06:45 UTC/)).toBeInTheDocument();
+    expect(within(empty).getByText(/11:00 UTC/)).toBeInTheDocument();
+  });
+
+  it("date selector cambia el endpoint a /by-date/{fecha}", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/by-date/")) {
+        return new Response(
+          JSON.stringify({ ...SAMPLE, fecha: "2026-04-25", id: "doc-old" }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify(SAMPLE), { status: 200 });
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("briefing-date-selector")).toBeInTheDocument();
+    });
+
+    // Por defecto carga /today (botón "Hoy" seleccionado)
+    const selector = screen.getByTestId("briefing-date-selector");
+    const todayBtn = within(selector).getByRole("tab", { name: /Hoy/ });
+    expect(todayBtn.getAttribute("aria-selected")).toBe("true");
+
+    // Click en otra fecha · debe cambiar el endpoint
+    const otherTabs = within(selector).getAllByRole("tab").filter(
+      (t) => t !== todayBtn,
+    );
+    expect(otherTabs.length).toBeGreaterThan(0);
+    const fireEvent = await import("@testing-library/react").then((m) => m.fireEvent);
+    fireEvent.click(otherTabs[0]);
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.map((c) =>
+        typeof c[0] === "string" ? c[0] : c[0].toString(),
+      );
+      expect(calls.some((u) => u.includes("/by-date/"))).toBe(true);
+    });
   });
 });

@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     sismo_api_url: str = Field(default="", alias="SISMO_API_URL")
     sismo_api_key: str = Field(default="", alias="SISMO_API_KEY")
 
+    # Twilio WhatsApp · Build market-intelligence-complete
+    twilio_account_sid: str = Field(default="", alias="TWILIO_ACCOUNT_SID")
+    twilio_auth_token: str = Field(default="", alias="TWILIO_AUTH_TOKEN")
+    twilio_whatsapp_from: str = Field(default="", alias="TWILIO_WHATSAPP_FROM")
+    twilio_whatsapp_to: str = Field(default="", alias="TWILIO_WHATSAPP_TO")
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Lista de orígenes permitidos, defensiva en profundidad.

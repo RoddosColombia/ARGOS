@@ -135,6 +135,11 @@ async def run_morning_briefing(
             db, workspace_id, memory_agent=memory_agent
         )
         result = await executive.publish_briefing(db, briefing, workspace_id=workspace_id)
+
+        # Build market-intelligence-complete · entrega WhatsApp
+        from argos.agents.notifications.service import send_briefing_whatsapp
+        whatsapp_result = await send_briefing_whatsapp(briefing)
+
         return {
             "fecha": result.fecha,
             "created": result.created,
@@ -142,6 +147,7 @@ async def run_morning_briefing(
             "recommendations_created": result.recommendations_created,
             "modelo_usado": briefing.modelo_usado,
             "memory_enabled": memory_agent is not None and memory_agent.enabled,
+            "whatsapp_sent": whatsapp_result.get("sent", False),
         }
     finally:
         if memory_agent is not None:

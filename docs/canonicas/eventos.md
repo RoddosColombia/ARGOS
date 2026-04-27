@@ -117,6 +117,12 @@ Bus argos_events. Append-only e inmutable (ROG-A6).
 | discovery.suggestions.generated | discovery_agent | strategist, dashboard | {category, counts: {trending, rising, liquidating, disappearing, total}} · emitido por `run_discovery_job` (cron 06:00 UTC) tras correr los 3 métodos por categoría activa · una emisión por categoría · Build config+ |
 | config.category.requested | config_api | audit_log, ARGOS team | {requested_by ≤200, label ≤200, note ≤300} · emitido por `POST /api/v1/config/categories/request` cuando el CEO pide habilitar una vertical nueva · NO crea la categoría · sólo notifica · Build config+ |
 
+### Dominio: Notificaciones (Build market-intelligence-complete)
+
+| event_type | Productor | Consumidores | Payload clave |
+|------------|-----------|--------------|---------------|
+| (no se emite event nuevo) · NotificationsAgent es un consumer del bus | — | — | NotificationsAgent muta `metadata.whatsapp_notified=True` en eventos `marketplace.price.alert` ya entregados (deduplicación) · NO altera payload (preserva ROG-A6 inmutabilidad de payload). |
+
 ### Dominio: Cross-system (ARGOS ⇄ SISMO V2)
 
 | event_type | Productor | Consumidores | Payload clave |

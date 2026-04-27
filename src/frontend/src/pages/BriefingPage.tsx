@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import type { AccionRecomendada, Briefing, Prioridad } from "@/types/briefing";
 
@@ -66,11 +67,29 @@ function AccionCard({ accion, idx }: { accion: AccionRecomendada; idx: number })
   );
 }
 
+function recentDates(n: number): string[] {
+  const out: string[] = [];
+  const today = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - i));
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
 export function BriefingPage() {
+  const dates = useMemo(() => recentDates(7), []);
+  const todayStr = dates[0];
+  const [selected, setSelected] = useState<string>(todayStr);
+  const isToday = selected === todayStr;
+
   const query = useQuery<Briefing>({
-    queryKey: ["briefing", "today"],
-    queryFn: () => apiRequest<Briefing>("/api/v1/briefing/today"),
-    refetchInterval: REFRESH_MS,
+    queryKey: ["briefing", isToday ? "today" : "by-date", selected],
+    queryFn: () =>
+      apiRequest<Briefing>(
+        isToday ? "/api/v1/briefing/today" : `/api/v1/briefing/by-date/${selected}`,
+      ),
+    refetchInterval: isToday ? REFRESH_MS : false,
     refetchIntervalInBackground: false,
     retry: false, // 404 cuando no hay briefing del día · no reintentar
   });
@@ -84,9 +103,33 @@ export function BriefingPage() {
         <p className="mt-1 text-sm text-ink-500">
           {query.data
             ? formatFecha(query.data.fecha)
-            : "Tu briefing diario · generado por Strategist 06:45 UTC"}
+            : "Tu briefing diario · generado por Strategist 11:00 UTC (06:00 AM Bogotá)"}
         </p>
       </header>
+
+      <div
+        className="flex flex-wrap gap-1.5"
+        role="tablist"
+        aria-label="Historial de briefings"
+        data-testid="briefing-date-selector"
+      >
+        {dates.map((d) => (
+          <button
+            key={d}
+            type="button"
+            role="tab"
+            aria-selected={d === selected}
+            onClick={() => setSelected(d)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium ring-1 ${
+              d === selected
+                ? "bg-brand-50 text-brand-700 ring-brand-200"
+                : "bg-white text-ink-700 ring-ink-200 hover:bg-ink-50"
+            }`}
+          >
+            {d === todayStr ? "Hoy" : d.slice(5)}
+          </button>
+        ))}
+      </div>
 
       {query.isLoading && (
         <div className="rounded-lg border border-ink-200 bg-white p-12 text-center text-sm text-ink-500">
@@ -102,7 +145,7 @@ export function BriefingPage() {
           <div className="text-3xl" aria-hidden>☕</div>
           <h2 className="mt-2 text-lg font-semibold text-amber-900">Sin briefing del día</h2>
           <p className="mt-1 text-sm text-amber-800">
-            El próximo job corre todos los días a las 06:45 UTC.
+            El próximo job corre todos los días a las 11:00 UTC (06:00 AM Bogotá).
             <br />
             Si configuraste recientemente <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">ANTHROPIC_API_KEY</code>,
             espera al próximo ciclo.

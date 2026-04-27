@@ -11,6 +11,7 @@ from argos import __version__
 from argos.api.v1.alerts import router as alerts_router
 from argos.api.v1.briefing import router as briefing_router
 from argos.api.v1.competitors import router as competitors_router
+from argos.api.v1.config import router as config_router
 from argos.api.v1.health import router as health_router
 from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.memory import router as memory_router
@@ -71,6 +72,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # CORS: 3 capas defensivas
+    # 1. Lista explícita de ARGOS_CORS_ORIGINS (preferido)
+    # 2. Si la lista está vacía (env var no propagado), regex fallback que cubre
+    #    localhost, argos.roddos.com y *.onrender.com con credentials habilitadas.
+    #    NOTA: usamos `allow_origin_regex` y NO `allow_origins=["*"]` porque
+    #    el spec CORS prohíbe combinar wildcard con `allow_credentials=True`.
     if settings.cors_origin_list:
         app.add_middleware(
             CORSMiddleware,
@@ -78,6 +85,27 @@ def create_app() -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+        )
+        logger.info(
+            "cors_configured",
+            extra={"mode": "explicit_list", "origins": settings.cors_origin_list},
+        )
+    else:
+        # Safety net: no debería pasar con el default sano de config.py · pero
+        # si alguien limpia el env var en Render, no rompemos producción.
+        fallback_regex = (
+            r"^https?://(localhost(:\d+)?|argos\.roddos\.com|.+\.onrender\.com)$"
+        )
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=fallback_regex,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        logger.warning(
+            "cors_fallback_regex_active",
+            extra={"regex": fallback_regex, "reason": "ARGOS_CORS_ORIGINS vacío"},
         )
 
     app.add_middleware(RequestLoggingMiddleware)
@@ -95,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(memory_router)
     app.include_router(recommendations_router)
     app.include_router(sismo_router)
+    app.include_router(config_router)
 
     return app
 

@@ -1,4 +1,7 @@
+import { useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { clearSession } from "@/lib/auth";
 
 interface ModuleCard {
   title: string;
@@ -18,11 +21,22 @@ const UPCOMING: ModuleCard[] = [
 export function DashboardPage() {
   const { data: user, isLoading, isError } = useCurrentUser();
 
+  // Si el backend rechaza el token (401 → apiRequest ya hizo clearSession),
+  // useCurrentUser queda en isError. Limpiamos cualquier residuo y redirigimos
+  // a /login en lugar de mostrar un h1 con "Sesión inválida".
+  useEffect(() => {
+    if (isError) clearSession();
+  }, [isError]);
+
+  if (isError) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <section>
         <h1 className="text-2xl font-semibold text-ink-900">
-          {isLoading ? "Cargando…" : isError ? "Sesión inválida" : `Bienvenido, ${user?.email}`}
+          {isLoading ? "Cargando…" : `Bienvenido, ${user?.email}`}
         </h1>
         <p className="mt-1 text-sm text-ink-500">
           Este es el dashboard interno de ARGOS. Phase 0 está en curso — los módulos funcionales se activan en phases siguientes.

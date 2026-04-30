@@ -55,6 +55,8 @@ def _serialize(doc: dict[str, Any]) -> dict[str, Any]:
         "hit_rate_contribution": doc.get("hit_rate_contribution"),
         "learning": doc.get("learning"),
         "status": doc.get("status", "pendiente"),
+        # Build 2.5.5 · ROG-G2: campo que enruta la cola de approval por role
+        "approval_required_role": doc.get("approval_required_role"),
         "approved_by": doc.get("approved_by"),
         "approved_at": doc["approved_at"].isoformat() if doc.get("approved_at") else None,
         "executed_at": doc["executed_at"].isoformat() if doc.get("executed_at") else None,
@@ -62,6 +64,30 @@ def _serialize(doc: dict[str, Any]) -> dict[str, Any]:
         "shown_in_briefing": list(doc.get("shown_in_briefing") or []),
         "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
     }
+
+
+def _can_approve(user_role: str, approval_required_role: str | None) -> tuple[bool, str]:
+    """ROG-G2 · valida que el role del JWT puede aprobar/rechazar la recomendación.
+
+    Reglas:
+    - Si `approval_required_role` es None → cualquier rol con acceso al endpoint
+      (CEO o CGO) puede aprobar. Compatibilidad con recomendaciones legacy.
+    - Si es "ceo" → solo CEO.
+    - Si es "cgo" → CGO o CEO (CEO también puede actuar como override · default
+      rechazo en 24h escala a CEO según ROG-G2).
+    - Si es "none" → ya no requiere approval (caso Plano 1 ya ejecutado).
+    """
+    if approval_required_role in (None, "", "none"):
+        return True, ""
+    if approval_required_role == "ceo":
+        if user_role == "ceo":
+            return True, ""
+        return False, "Esta acción requiere approval del CEO (Plano 3)"
+    if approval_required_role == "cgo":
+        if user_role in ("cgo", "ceo"):
+            return True, ""
+        return False, "Esta acción requiere approval del CGO (Plano 2)"
+    return False, f"approval_required_role desconocido: {approval_required_role!r}"
 
 
 def _parse_object_id(rec_id: str) -> ObjectId:
@@ -76,16 +102,31 @@ def _parse_object_id(rec_id: str) -> ObjectId:
 
 @router.get("")
 async def list_recommendations(
-    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    user: Annotated[UserOut, Depends(require_role("ceo", "cgo"))],
     status_filter: Annotated[RecStatus | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 20,
+    approval_role: Annotated[str | None, Query(description="Filtrar por approval_required_role: ceo|cgo|none")] = None,
 ) -> list[dict[str, Any]]:
-    """Lista recomendaciones del workspace · ordenadas por priority desc + created desc."""
+    """Lista recomendaciones del workspace · ordenadas por priority desc + created desc.
+
+    ROG-G1 · CEO + CGO ven la misma información. ROG-G2 · `approval_role` permite
+    filtrar la cola personal de cada role en el frontend (ceo ve sus Plano 3,
+    cgo ve sus Plano 2).
+    """
     _ensure_mongo()
     db = get_database()
     query: dict[str, Any] = {"workspace_id": user.workspace_id}
     if status_filter:
         query["status"] = status_filter
+    if approval_role is not None:
+        if approval_role == "none":
+            query["$or"] = [
+                {"approval_required_role": {"$exists": False}},
+                {"approval_required_role": None},
+                {"approval_required_role": "none"},
+            ]
+        else:
+            query["approval_required_role"] = approval_role
     cursor = (
         db[col.RECOMMENDATIONS]
         .find(query)
@@ -98,7 +139,7 @@ async def list_recommendations(
 
 @router.get("/hit-rate")
 async def hit_rate(
-    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    user: Annotated[UserOut, Depends(require_role("ceo", "cgo"))],
     days: Annotated[int, Query(ge=1, le=365)] = HIT_RATE_DEFAULT_DAYS,
 ) -> dict[str, Any]:
     """Tasa de éxito promedio de recomendaciones evaluadas en los últimos N días."""
@@ -134,14 +175,35 @@ async def hit_rate(
 
 @router.post("/{rec_id}/approve")
 async def approve_recommendation(
-    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    user: Annotated[UserOut, Depends(require_role("ceo", "cgo"))],
     rec_id: str,
 ) -> dict[str, Any]:
-    """Aprueba una recomendación pendiente · status → aprobada · emite evento."""
+    """Aprueba una recomendación pendiente · status → aprobada · emite evento.
+
+    ROG-G2 · valida que el role del JWT coincida con `approval_required_role`
+    de la recomendación. CEO puede aprobar Plano 2 (override) y Plano 3.
+    CGO solo puede aprobar Plano 2.
+    """
     _ensure_mongo()
     db = get_database()
     obj_id = _parse_object_id(rec_id)
     now = datetime.now(tz=UTC)
+
+    # Lectura previa para validar approval_required_role contra role del JWT.
+    existing = await db[col.RECOMMENDATIONS].find_one(
+        {"_id": obj_id, "workspace_id": user.workspace_id},
+    )
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recomendación no encontrada")
+    if existing.get("status") != "pendiente":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recomendación no está en status 'pendiente'",
+        )
+
+    can, reason = _can_approve(user.role, existing.get("approval_required_role"))
+    if not can:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
 
     result = await db[col.RECOMMENDATIONS].update_one(
         {
@@ -186,15 +248,33 @@ async def approve_recommendation(
 
 @router.post("/{rec_id}/reject")
 async def reject_recommendation(
-    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    user: Annotated[UserOut, Depends(require_role("ceo", "cgo"))],
     rec_id: str,
     reason: Annotated[str, Body(embed=True)] = "",
 ) -> dict[str, Any]:
-    """Rechaza una recomendación pendiente · status → rechazada · emite evento."""
+    """Rechaza una recomendación pendiente · status → rechazada · emite evento.
+
+    ROG-G2 · valida role vs approval_required_role (igual que approve).
+    """
     _ensure_mongo()
     db = get_database()
     obj_id = _parse_object_id(rec_id)
     now = datetime.now(tz=UTC)
+
+    existing = await db[col.RECOMMENDATIONS].find_one(
+        {"_id": obj_id, "workspace_id": user.workspace_id},
+    )
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recomendación no encontrada")
+    if existing.get("status") != "pendiente":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recomendación no está en status 'pendiente'",
+        )
+
+    can, can_reason = _can_approve(user.role, existing.get("approval_required_role"))
+    if not can:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=can_reason)
 
     result = await db[col.RECOMMENDATIONS].update_one(
         {

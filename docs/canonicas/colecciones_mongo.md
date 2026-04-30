@@ -8,7 +8,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | Colección | Estado | Phase / Capa |
 |-----------|--------|--------------|
 | `workspaces` | ✅ Implementada | Phase 0 |
-| `users` | ✅ Implementada · 🟡 schema extension Phase 2.5 (CGO role nativo) | Phase 0 + 2.5 |
+| `users` | ✅ Implementada · CGO role nativo agregado en Build 2.5.5 (ROG-G1) · seed condicional con CGO_EMAIL/CGO_PASSWORD_HASH/CGO_WORKSPACE_ID | Phase 0 + 2.5 |
 | `contacts` | ✅ Implementada (Build 2.5.3 · cierra ROG-W1 preventivo) · 4 índices + 4 endpoints + helper `can_send_proactive` | Phase 2.5 |
 | `conversations` | 🟡 Spec · construir Capa 1 | Phase 3 / Capa 1 |
 | `messages` | 🟡 Spec · construir Capa 1 | Phase 3 / Capa 1 |
@@ -20,7 +20,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | `social_posts` | ✅ Implementada | Phase 1 (Build 2.3) |
 | `keywords` | ✅ Implementada | Phase 1 |
 | `briefings` | ✅ Implementada | Phase 1 (Build 3.1) |
-| `recommendations` | ✅ Implementada · 🟡 schema extension Phase 2.5 (`approval_required_role`) | Phase 1 + 2.5 |
+| `recommendations` | ✅ Implementada + extensión Phase 2.5 (Build 2.5.5: `approval_required_role` enruta cola CEO/CGO · ROG-G2) | Phase 1 + 2.5 |
 | `sismo_inventory` | ✅ Implementada | Phase 1 (Build 4.1) |
 | `sismo_sales_daily` | ✅ Implementada | Phase 1 (Build 4.2) |
 | `categories` | ✅ Implementada | Phase 1 (Build config) |

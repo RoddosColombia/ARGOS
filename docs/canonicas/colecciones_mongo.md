@@ -9,7 +9,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 |-----------|--------|--------------|
 | `workspaces` | ✅ Implementada | Phase 0 |
 | `users` | ✅ Implementada · 🟡 schema extension Phase 2.5 (CGO role nativo) | Phase 0 + 2.5 |
-| `contacts` | 🟡 Spec · construir Build 2.5.3 | Phase 2.5 |
+| `contacts` | ✅ Implementada (Build 2.5.3 · cierra ROG-W1 preventivo) · 4 índices + 4 endpoints + helper `can_send_proactive` | Phase 2.5 |
 | `conversations` | 🟡 Spec · construir Capa 1 | Phase 3 / Capa 1 |
 | `messages` | 🟡 Spec · construir Capa 1 | Phase 3 / Capa 1 |
 | `scoring_solicitudes` | ⚠️ Cambiada · NO vive en cluster ARGOS · `ScoreReader` lee read-only del cluster compartido | Phase 2 (pivote) |
@@ -100,12 +100,29 @@ Reglas universales:
 | moto_anio | int | |
 | es_cliente_roddos | bool | true si tiene crédito activo o histórico en SISMO |
 | score_comportamental | enum | A+/A/B/C/D/E (de loanbook SISMO si aplica) |
-| opt_in_marketing | bool | ROG-W1 |
-| opt_in_marketing_at | datetime | timestamp + canal de obtención |
-| opt_in_canal | string | 'whatsapp_first_message' / 'web_form' / 'qr_empaque' |
+| **(actualizado Build 2.5.3 · ROG-W1)** | | El opt-in pasa a estructura nested anidada para poder distinguir marketing vs utility (Meta) y mantener history append-only de cada cambio. |
+| phone_number | string E.164 | unique por workspace · reemplaza `phone` legacy |
+| opt_in_marketing | object | `{status: opted_in/opted_out/pending, captured_at, channel, consent_text_version, captured_by, history: []}` |
+| opt_in_utility | object | misma estructura que `opt_in_marketing` · independiente |
+| last_message_at | datetime nullable | actualizado por WhatsApp Agent (Phase 3+) |
 | created_at | datetime | |
+| updated_at | datetime | |
 
-Índices: (workspace_id, phone) unique · (workspace_id, sismo_customer_id) · (workspace_id, es_cliente_roddos)
+Índices (Build 2.5.3):
+- `(workspace_id, phone_number)` **unique** — `workspace_phone_unique`
+- `(workspace_id, opt_in_marketing.status)` — `workspace_opt_in_marketing_status` (driver de outbound campaigns)
+- `(workspace_id, opt_in_utility.status)` — `workspace_opt_in_utility_status`
+- `(workspace_id, last_message_at desc)` — `workspace_last_message_desc` (recent activity)
+
+**Endpoints (Build 2.5.3):**
+- `POST /api/v1/contacts/{phone_number}/opt-in` · upsert con audit trail
+- `POST /api/v1/contacts/{phone_number}/opt-out` · cambia status preservando history
+- `GET  /api/v1/contacts/{phone_number}/opt-status` · lectura (incluye history)
+- `GET  /api/v1/contacts` · listado paginado con filtros opt-in
+
+**Gate de outbound (ROG-W1 enforcement):** TODO mensaje proactivo Phase 3+ debe llamar
+`argos.services.opt_in.can_send_proactive(db, workspace_id, phone, type)` antes de enviar.
+Si retorna `(False, reason)`, el envío se bloquea y se loggea.
 
 ## Colección: conversations
 

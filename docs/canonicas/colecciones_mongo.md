@@ -2,6 +2,46 @@
 
 Schemas de cada colección MongoDB en el cluster argos-prod.
 
+> **Auditado en Phase 2.5 · Build 2.5.1 (2026-04-29)**: cada colección marcada con su estado real.
+> Leyenda: ✅ Implementada · 🟡 Spec pendiente · ⚠️ Cambiada por pivote · ⛔ Movida fuera de ARGOS
+
+| Colección | Estado | Phase / Capa |
+|-----------|--------|--------------|
+| `workspaces` | ✅ Implementada | Phase 0 |
+| `users` | ✅ Implementada · 🟡 schema extension Phase 2.5 (CGO role nativo) | Phase 0 + 2.5 |
+| `contacts` | 🟡 Spec · construir Build 2.5.3 | Phase 2.5 |
+| `conversations` | 🟡 Spec · construir Capa 1 | Phase 3 / Capa 1 |
+| `messages` | 🟡 Spec · construir Capa 1 | Phase 3 / Capa 1 |
+| `scoring_solicitudes` | ⚠️ Cambiada · NO vive en cluster ARGOS · `ScoreReader` lee read-only del cluster compartido | Phase 2 (pivote) |
+| `products_catalog` | ✅ Implementada | Phase 1 |
+| `products_history` | ✅ Implementada | Phase 1 |
+| `ads_library` | ✅ Implementada | Phase 1 (Build 2.1) |
+| `social_accounts` | ✅ Implementada | Phase 1 (Build 2.3) |
+| `social_posts` | ✅ Implementada | Phase 1 (Build 2.3) |
+| `keywords` | ✅ Implementada | Phase 1 |
+| `briefings` | ✅ Implementada | Phase 1 (Build 3.1) |
+| `recommendations` | ✅ Implementada · 🟡 schema extension Phase 2.5 (`approval_required_role`) | Phase 1 + 2.5 |
+| `sismo_inventory` | ✅ Implementada | Phase 1 (Build 4.1) |
+| `sismo_sales_daily` | ✅ Implementada | Phase 1 (Build 4.2) |
+| `categories` | ✅ Implementada | Phase 1 (Build config) |
+| `discovery_suggestions` | ✅ Implementada | Phase 1 (Build config) |
+| `watch_queries` | ✅ Implementada | Phase 1 (Build 1.1) |
+| `campaigns` | 🟡 Spec · construir Capa 5 | Phase 8 / Capa 5 |
+| `cobros` | ⛔ Obsoleta · cobranza vive en SISMO V2 (Visión 2.1 sec 4.7) | — |
+| `argos_events` | ✅ Implementada | Phase 0 |
+| `agent_memory` | ✅ Implementada | Phase 1 (memoria largo plazo) |
+| `agent_sessions` | 🟡 Spec · construir cuando WhatsApp Agent lo requiera | Phase 3 / Capa 1 |
+| `audit_log` | ✅ Indices implementados · 🟡 writers en Build 2.5.2 | Phase 0 + 2.5 (escritura) |
+| `apscheduler_jobs` | 🟡 Spec · construir Build 2.5.7 (cierra DT-004) | Phase 2.5 |
+| `compliance_envelope` | 🟡 Spec · construir Build 2.5.4 | Phase 2.5 |
+| `competitor_profiles` | 🟡 Spec · construir Capa 4 (Account intel agent) | Capa 4 |
+| `portfolio_suggestions` | 🟡 Spec · construir Capa 4 (Portfolio agent) | Capa 4 |
+| `sku_canonical_aliases` | 🟡 Spec · construir Capa 4 (SKU canonicalizer) | Capa 4 |
+| `pricing_suggestions` | 🟡 Spec · construir Capa 5 (Pricing engine) | Capa 5 |
+| `notifications_dispatch_log` | 🟡 Spec opcional · alternativa a metadata mutation en argos_events (Build 2.5.9) | Phase 2.5 |
+| `deuda_tecnica` | ⚠️ Vive como markdown en `docs/claude/deuda_tecnica.md`, no como collection | — |
+| `system_health` | ✅ Implementada | Phase 0 |
+
 Reglas universales:
 - Toda colección incluye `workspace_id: string` (ROG-A3) e índice por workspace_id
 - Toda colección incluye `created_at: datetime UTC` e índice por created_at

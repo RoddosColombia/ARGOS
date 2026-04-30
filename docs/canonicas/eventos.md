@@ -2,6 +2,25 @@
 
 Bus argos_events. Append-only e inmutable (ROG-A6).
 
+> **Auditado en Phase 2.5 · Build 2.5.1 (2026-04-29)**: cada evento marcado con su estado real.
+> Leyenda: ✅ Publicado en código · 🟡 Spec pendiente · ⛔ Movido fuera de ARGOS · ⚠️ Cambiado por pivote
+
+## Estado por dominio
+
+| Dominio | Eventos publicados | Eventos spec | Eventos obsoletos |
+|---------|--------------------|--------------|-------------------|
+| WhatsApp (canal cliente) | 0 | 7 (todos · Capa 1) | 0 |
+| Score Engine | 0 | 0 (delegado al motor externo · ARGOS solo audit local lado-Argos) | 8 (todos los originales obsoletos por pivote) |
+| Cobranza | 0 | 0 | 7 (todos · cobranza vive en SISMO) |
+| Marketplace e inteligencia | 11 | 5 (extension Capa 4: account_intel, portfolio, pricing) | 0 |
+| Strategist y decisiones | 4 | 1 (campaign.* en Capa 5) | 1 (recommendation.measured deprecated) |
+| Media Buyer | 0 | 5 (todos · Capa 5) | 0 |
+| Briefing | 1 | 0 | 0 |
+| Configuración | 2 | 0 | 0 |
+| Notificaciones | 0 | 1 (en futuro: notifications.dispatched cuando entre Phase 3) | 0 |
+| Cross-system ARGOS↔SISMO | 2 | 4 (writes ARGOS→SISMO en Capa 1) | 0 |
+| Compliance Officer | 0 | 4 (todos · Phase 2.5 + Capa 5) | 0 |
+
 ## Schema base de todo evento
 
 ```json

@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiRequest } from "@/lib/api";
 import type {
-  Decision,
   Producto,
   ScoreComportamental,
   ScoreConfig,

@@ -324,6 +324,27 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── contacts (Build 2.5.3 · opt-in registry · ROG-W1 preventivo) ────────
+    created[col.CONTACTS] = await db[col.CONTACTS].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("phone_number", ASCENDING)],
+            name="workspace_phone_unique",
+            unique=True,
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("opt_in_marketing.status", ASCENDING)],
+            name="workspace_opt_in_marketing_status",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("opt_in_utility.status", ASCENDING)],
+            name="workspace_opt_in_utility_status",
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("last_message_at", DESCENDING)],
+            name="workspace_last_message_desc",
+        ),
+    ])
+
     total = sum(len(v) for v in created.values())
     logger.info("indexes_ensured", extra={"collections": list(created.keys()), "total_indexes": total})
     return created

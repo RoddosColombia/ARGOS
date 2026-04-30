@@ -12,6 +12,7 @@ from argos.api.v1.alerts import router as alerts_router
 from argos.api.v1.briefing import router as briefing_router
 from argos.api.v1.competitors import router as competitors_router
 from argos.api.v1.config import router as config_router
+from argos.api.v1.contacts import router as contacts_router
 from argos.api.v1.health import router as health_router
 from argos.api.v1.marketplace import router as marketplace_router
 from argos.api.v1.memory import router as memory_router
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     app.include_router(sismo_router)
     app.include_router(config_router)
     app.include_router(score_router)
+    app.include_router(contacts_router)
 
     return app
 

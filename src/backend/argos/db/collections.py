@@ -92,6 +92,13 @@ ALL_BUILD_CONFIG: tuple[str, ...] = (
     DISCOVERY_SUGGESTIONS,
 )
 
+# ─── Build 2.5.3 (Phase 2.5 · contacts + opt-in registry · ROG-W1) ───────
+CONTACTS = "contacts"
+
+ALL_BUILD_2_5_3: tuple[str, ...] = (
+    CONTACTS,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -105,4 +112,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_4_1
     + ALL_BUILD_4_2
     + ALL_BUILD_CONFIG
+    + ALL_BUILD_2_5_3
 )

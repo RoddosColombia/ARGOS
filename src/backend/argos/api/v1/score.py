@@ -1,0 +1,91 @@
+"""API Score Engine · Phase 2 · ARGOS pass-through al motor externo de Iván.
+
+- POST /api/v1/score/evaluate     → forward a SCORE_ENGINE_API_URL/v1/evaluate
+- GET  /api/v1/score/solicitudes  → lee scoring_solicitudes desde RODDOS_MONGODB_URI
+- GET  /api/v1/score/config       → expone URL del Score Engine (para banner UI)
+
+ARGOS NO ejecuta scores · NO aplica reglas duras · NO llama Claude.
+La auditoría (ROG-S4) y el versionado del modelo (ROG-S5) viven en el repo de Iván.
+"""
+from __future__ import annotations
+
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+
+from argos.agents.score.client import ScoreEngineClient, ScoreEngineError
+from argos.agents.score.reader import ScoreReader
+from argos.auth.deps import require_role
+from argos.auth.schemas import UserOut
+from argos.config import get_settings
+
+router = APIRouter(prefix="/api/v1/score", tags=["score"])
+
+
+@router.get("/config")
+async def score_config(
+    _user: Annotated[UserOut, Depends(require_role("ceo"))],
+) -> dict[str, Any]:
+    """Endpoint informativo para el banner del frontend."""
+    s = get_settings()
+    return {
+        "score_engine_api_url": s.score_engine_api_url or None,
+        "roddos_mongodb_configured": bool(s.roddos_mongodb_uri),
+    }
+
+
+@router.post("/evaluate")
+async def evaluate_solicitud(
+    _user: Annotated[UserOut, Depends(require_role("ceo"))],
+    payload: Annotated[dict[str, Any], Body(description="Payload del Score Engine externo")],
+) -> dict[str, Any]:
+    """Pass-through: reenvía el payload al Score Engine de Iván y devuelve la respuesta cruda."""
+    client = ScoreEngineClient()
+    try:
+        resp = await client.evaluate(payload)
+    except ScoreEngineError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Score Engine error · {exc.status}: {exc.message[:200]}",
+        ) from exc
+    body = dict(resp.raw)
+    # Garantizar campos canónicos en el response (incluso si el upstream no los puso)
+    body.setdefault("decision", resp.decision)
+    body.setdefault("score_final", resp.score_final)
+    body.setdefault("solicitud_id", resp.solicitud_id)
+    return body
+
+
+@router.get("/solicitudes")
+async def list_solicitudes(
+    user: Annotated[UserOut, Depends(require_role("ceo"))],
+    decision: Annotated[str | None, Query(max_length=40)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[dict[str, Any]]:
+    """Lee scoring_solicitudes desde RODDOS_MONGODB_URI (DB compartida con Iván).
+
+    Si RODDOS_MONGODB_URI no está configurado, devuelve [] (skip silencioso).
+    """
+    reader = ScoreReader()
+    try:
+        records = await reader.get_recent(
+            workspace_id=user.workspace_id, limit=limit, decision=decision,
+        )
+    finally:
+        await reader.close()
+    return [
+        {
+            "id": r.solicitud_id,
+            "solicitud_id": r.solicitud_id,
+            "producto": r.producto,
+            "score_final": r.score_final,
+            "decision": r.decision,
+            "nombre": r.nombre,
+            "monto_solicitado": r.monto_solicitado,
+            "narrativa": r.narrativa,
+            "regla_dura_aplicada": r.regla_dura_aplicada,
+            "engine_version": r.engine_version,
+            "created_at": r.created_at,
+        }
+        for r in records
+    ]

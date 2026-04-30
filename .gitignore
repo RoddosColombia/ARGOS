@@ -114,5 +114,17 @@ models/*.pkl
 # Langfuse / observabilidad local
 .langfuse/
 
-# Claude Code local state (configuración por-máquina)
-.claude/settings.local.json
+# Claude Code local state (configuración por-máquina y session data)
+.claude/
+
+# Documentos de revisión / informes generados por Claude.ai conversacional · NO son source del repo
+/InformeArgos.docx
+/REVISION_*.docx
+/Revision_*.docx
+/*-revision.docx
+/*-informe.docx
+
+# Scripts ad-hoc de debug/admin · NO commitear (suelen contener credenciales hardcodeadas)
+src/backend/reset.py
+src/backend/scratch_*.py
+src/backend/admin_*.py

@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     admin_role: str = Field(default="ceo", alias="ADMIN_ROLE")
     admin_workspace_id: str = Field(default="RODDOS", alias="ADMIN_WORKSPACE_ID")
 
+    # Build 2.5.5 · CGO Iván Echeverri (ROG-G1). Mismo workspace que CEO.
+    # Si las env vars están vacías, el seed del CGO se salta (no rompe boot).
+    cgo_email: str = Field(default="", alias="CGO_EMAIL")
+    cgo_password_hash: str = Field(default="", alias="CGO_PASSWORD_HASH")
+    cgo_workspace_id: str = Field(default="RODDOS", alias="CGO_WORKSPACE_ID")
+
     # Default sano que incluye dominio público + dev local. Si Render NO propaga
     # ARGOS_CORS_ORIGINS, este fallback evita que el frontend rompa con CORS.
     # Override en Render con la lista exacta cuando se agreguen dominios.

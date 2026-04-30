@@ -95,6 +95,34 @@ async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
             extra={"reason": "ADMIN_EMAIL o ADMIN_PASSWORD_HASH vacíos"},
         )
 
+    # ─── User CGO (Build 2.5.5 · ROG-G1) ─────────────────────────────────────
+    # Mismo patrón que CEO · INSERT-ONLY del password_hash · idempotente.
+    # Si CGO_EMAIL o CGO_PASSWORD_HASH no están seteados, se salta sin romper boot.
+    result["cgo_user_created"] = False
+    if settings.cgo_email and settings.cgo_password_hash:
+        cgo_workspace_id = settings.cgo_workspace_id or workspace_id
+        cgo_update = await db[col.USERS].update_one(
+            {"workspace_id": cgo_workspace_id, "email": settings.cgo_email.lower()},
+            {
+                "$set": {
+                    "roles": ["cgo"],
+                },
+                "$setOnInsert": {
+                    "workspace_id": cgo_workspace_id,
+                    "email": settings.cgo_email.lower(),
+                    "password_hash": settings.cgo_password_hash,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        result["cgo_user_created"] = cgo_update.upserted_id is not None
+    else:
+        logger.info(
+            "cgo_seed_skipped",
+            extra={"reason": "CGO_EMAIL o CGO_PASSWORD_HASH vacíos"},
+        )
+
     # ─── Watch queries (Build 1.1 + extensión config) ────────────────────
     inserted = 0
     for query_str in _DEFAULT_WATCH_QUERIES:

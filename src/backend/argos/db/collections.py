@@ -99,6 +99,13 @@ ALL_BUILD_2_5_3: tuple[str, ...] = (
     CONTACTS,
 )
 
+# ─── Build 2.5.4 (Phase 2.5 · Compliance Officer Plano 1 · ROG-A2 + ROG-A10) ─
+COMPLIANCE_ENVELOPE = "compliance_envelope"
+
+ALL_BUILD_2_5_4: tuple[str, ...] = (
+    COMPLIANCE_ENVELOPE,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -113,4 +120,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_4_2
     + ALL_BUILD_CONFIG
     + ALL_BUILD_2_5_3
+    + ALL_BUILD_2_5_4
 )

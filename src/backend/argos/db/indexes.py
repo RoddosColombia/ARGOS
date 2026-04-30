@@ -324,6 +324,20 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> dict[str, list[str]]:
         ),
     ])
 
+    # ─── compliance_envelope (Build 2.5.4 · Plano 1 · ROG-A2 + ROG-A10) ──────
+    created[col.COMPLIANCE_ENVELOPE] = await db[col.COMPLIANCE_ENVELOPE].create_indexes([
+        IndexModel(
+            [("workspace_id", ASCENDING), ("action_type", ASCENDING), ("active", ASCENDING)],
+            name="workspace_action_active_unique",
+            unique=True,
+            partialFilterExpression={"active": True},
+        ),
+        IndexModel(
+            [("workspace_id", ASCENDING), ("plano", ASCENDING)],
+            name="workspace_plano",
+        ),
+    ])
+
     # ─── contacts (Build 2.5.3 · opt-in registry · ROG-W1 preventivo) ────────
     created[col.CONTACTS] = await db[col.CONTACTS].create_indexes([
         IndexModel(

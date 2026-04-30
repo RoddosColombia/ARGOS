@@ -11,6 +11,7 @@ from argos import __version__
 from argos.api.v1.alerts import router as alerts_router
 from argos.api.v1.briefing import router as briefing_router
 from argos.api.v1.competitors import router as competitors_router
+from argos.api.v1.compliance import router as compliance_router
 from argos.api.v1.config import router as config_router
 from argos.api.v1.contacts import router as contacts_router
 from argos.api.v1.health import router as health_router
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(config_router)
     app.include_router(score_router)
     app.include_router(contacts_router)
+    app.include_router(compliance_router)
 
     return app
 

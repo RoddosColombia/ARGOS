@@ -33,7 +33,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | `agent_sessions` | 🟡 Spec · construir cuando WhatsApp Agent lo requiera | Phase 3 / Capa 1 |
 | `audit_log` | ✅ Indices + writers implementados (Build 2.5.2 cierra ROG-A12) · campo `actor_role` añadido para ROG-G3 | Phase 0 + 2.5 |
 | `apscheduler_jobs` | 🟡 Spec · construir Build 2.5.7 (cierra DT-004) | Phase 2.5 |
-| `compliance_envelope` | 🟡 Spec · construir Build 2.5.4 | Phase 2.5 |
+| `compliance_envelope` | ✅ Implementada (Build 2.5.4 · cierra ROG-A2 + ROG-A10) · 8 envelopes default sembrados + 3 endpoints + agente ComplianceOfficer | Phase 2.5 |
 | `competitor_profiles` | 🟡 Spec · construir Capa 4 (Account intel agent) | Capa 4 |
 | `portfolio_suggestions` | 🟡 Spec · construir Capa 4 (Portfolio agent) | Capa 4 |
 | `sku_canonical_aliases` | 🟡 Spec · construir Capa 4 (SKU canonicalizer) | Capa 4 |

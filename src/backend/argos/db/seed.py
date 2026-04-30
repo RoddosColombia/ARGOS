@@ -140,5 +140,23 @@ async def seed_initial_data(db: AsyncIOMotorDatabase) -> dict[str, int | bool]:
             cat_inserted += 1
     result["categories_inserted"] = cat_inserted
 
+    # ─── Compliance envelopes (Build 2.5.4 · Plano 1 · ROG-A2 + ROG-A10) ──
+    # Import lazy para evitar ciclo (compliance_officer no debe forzar import en startup
+    # si por alguna razón el módulo falla).
+    try:
+        from argos.agents.compliance_officer.service import seed_default_envelopes
+        envelopes_inserted = await seed_default_envelopes(
+            db,
+            workspace_id=workspace_id,
+            approved_by="seed:initial",
+        )
+        result["compliance_envelopes_inserted"] = envelopes_inserted
+    except Exception as exc:  # noqa: BLE001 · seed no debe romper boot
+        logger.warning(
+            "compliance_envelopes_seed_skipped",
+            extra={"error": str(exc)[:200]},
+        )
+        result["compliance_envelopes_inserted"] = 0
+
     logger.info("seed_done", extra=result)
     return result

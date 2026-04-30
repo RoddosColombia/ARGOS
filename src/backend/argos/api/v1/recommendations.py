@@ -16,6 +16,7 @@ from argos.db.events import (
     publish_recommendation_rejected,
 )
 from argos.db.mongo import get_database, get_mongo_client
+from argos.services.audit import ActionResult, ActorType, audit_write
 
 router = APIRouter(prefix="/api/v1/recommendations", tags=["recommendations"])
 
@@ -168,6 +169,17 @@ async def approve_recommendation(
         recommendation_id=rec_id,
         approved_by=user.email,
     )
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="recommendation.approved",
+        resource_type="recommendation",
+        resource_id=rec_id,
+        result=ActionResult.SUCCESS,
+    )
     doc = await db[col.RECOMMENDATIONS].find_one({"_id": obj_id})
     return _serialize(doc) if doc else {"id": rec_id, "status": "aprobada"}
 
@@ -211,6 +223,18 @@ async def reject_recommendation(
         recommendation_id=rec_id,
         rejected_by=user.email,
         reason=reason,
+    )
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="recommendation.rejected",
+        resource_type="recommendation",
+        resource_id=rec_id,
+        result=ActionResult.SUCCESS,
+        metadata={"reason": reason[:300]} if reason else None,
     )
     doc = await db[col.RECOMMENDATIONS].find_one({"_id": obj_id})
     return _serialize(doc) if doc else {"id": rec_id, "status": "rechazada"}

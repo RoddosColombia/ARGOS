@@ -21,6 +21,7 @@ from argos.auth.schemas import UserOut
 from argos.db import collections as col
 from argos.db.events import publish_category_requested
 from argos.db.mongo import get_database, get_mongo_client
+from argos.services.audit import ActionResult, ActorType, audit_write
 
 router = APIRouter(prefix="/api/v1/config", tags=["config"])
 
@@ -147,6 +148,18 @@ async def create_query(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=409, detail=f"Query duplicada o inválida: {exc}") from exc
     saved = await db[col.WATCH_QUERIES].find_one({"_id": result.inserted_id})
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="config.watch_query.created",
+        resource_type="watch_query",
+        resource_id=str(result.inserted_id),
+        result=ActionResult.SUCCESS,
+        metadata={"query": body.query.strip()[:200], "category": body.category, "source": body.source},
+    )
     return _serialize_query(saved or doc)
 
 
@@ -178,6 +191,18 @@ async def patch_query(
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Query no encontrada")
     doc = await db[col.WATCH_QUERIES].find_one({"_id": oid})
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="config.watch_query.updated",
+        resource_type="watch_query",
+        resource_id=qid,
+        result=ActionResult.SUCCESS,
+        metadata={"changes": {k: v for k, v in set_fields.items() if k != "updated_at"}},
+    )
     return _serialize_query(doc or {})
 
 
@@ -194,6 +219,17 @@ async def delete_query(
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Query no encontrada")
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="config.watch_query.deleted",
+        resource_type="watch_query",
+        resource_id=qid,
+        result=ActionResult.SUCCESS,
+    )
 
 
 # ─── Categories ──────────────────────────────────────────────────────────
@@ -229,6 +265,18 @@ async def patch_category(
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
     doc = await db[col.CATEGORIES].find_one({"workspace_id": user.workspace_id, "slug": slug})
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="config.category.toggled",
+        resource_type="category",
+        resource_id=slug,
+        result=ActionResult.SUCCESS,
+        metadata={"active": body.active},
+    )
     return _serialize_category(doc or {})
 
 
@@ -251,6 +299,16 @@ async def request_category(
         requested_by=user.email,
         label=body.label,
         note=body.note,
+    )
+    await audit_write(
+        db,
+        workspace_id=user.workspace_id,
+        actor_type=ActorType.USER,
+        actor_id=user.email,
+        actor_role=user.role,
+        action="config.category.requested",
+        result=ActionResult.SUCCESS,
+        metadata={"label": body.label, "note": body.note[:300]},
     )
     return {"accepted": True, "label": body.label}
 

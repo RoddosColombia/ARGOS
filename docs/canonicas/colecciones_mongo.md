@@ -31,7 +31,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | `argos_events` | ✅ Implementada | Phase 0 |
 | `agent_memory` | ✅ Implementada | Phase 1 (memoria largo plazo) |
 | `agent_sessions` | 🟡 Spec · construir cuando WhatsApp Agent lo requiera | Phase 3 / Capa 1 |
-| `audit_log` | ✅ Indices implementados · 🟡 writers en Build 2.5.2 | Phase 0 + 2.5 (escritura) |
+| `audit_log` | ✅ Indices + writers implementados (Build 2.5.2 cierra ROG-A12) · campo `actor_role` añadido para ROG-G3 | Phase 0 + 2.5 |
 | `apscheduler_jobs` | 🟡 Spec · construir Build 2.5.7 (cierra DT-004) | Phase 2.5 |
 | `compliance_envelope` | 🟡 Spec · construir Build 2.5.4 | Phase 2.5 |
 | `competitor_profiles` | 🟡 Spec · construir Capa 4 (Account intel agent) | Capa 4 |

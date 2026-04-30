@@ -2,6 +2,18 @@
 
 Registro vivo de decisiones conscientes de diferir trabajo. Cada entrada incluye owner, prioridad, y phase objetivo para resolver.
 
+## DT-025 · ✅ RESUELTO en Build 2.5.2 · audit_log writers ausentes (ROG-A12)
+
+**Original**: "ARGOS no audita las llamadas a /evaluate. Pass-through actual no escribe a `audit_log` (ROG-A12). Aceptable porque el Score Engine externo audita en su propio side."
+
+**Resolución (Phase 2.5 / Build 2.5.2 · 2026-04-30)**:
+- Helper `argos.services.audit.audit_write()` creado con validación de campos, skip silencioso si no hay db, manejo de excepciones, soporte para `actor_role` (ROG-G3).
+- Integración en call sites críticos: login (success + failure), score evaluate (success + failure con payload hash sin PII), recommendations approve/reject, config queries CRUD, config categories toggle/request.
+- Suite de tests `tests/backend/test_audit_writer.py` con 14 casos · cobertura ≥90% del módulo.
+- Schema persistido alineado con `docs/canonicas/colecciones_mongo.md` audit_log + nuevo campo `actor_role`.
+
+
+
 Formato:
 
 ```markdown

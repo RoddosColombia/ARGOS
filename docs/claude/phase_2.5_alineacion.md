@@ -3,7 +3,7 @@
 > Documento vivo — actualizado al cierre de cada build.
 > Refs: `.planning/phase_2.5_prompt.md` · Visión 2.1 · CLAUDE.md
 
-**Estado global:** 7 de 9 builds cerrados · Builds 2.5.8 y 2.5.9 pendientes.
+**Estado global:** 8 de 9 builds cerrados · Build 2.5.8 diferido como deuda aceptada (no bloquea Capa 1) · **Phase 2.5 CERRADA** con tag `phase-2.5-closed`.
 
 ---
 
@@ -172,24 +172,50 @@
 
 ## Builds pendientes
 
+### Build 2.5.9 — ROG-A6 metadata mutation policy formalizada
+
+**Estado:** ✅ Cerrado · 2026-05-14
+
+**Decisión tomada:** Path A — legalizar la mutación existente con lista explícita de campos
+permitidos y test guard. Path B (colección colateral `notifications_dispatch_log`) se revisará
+en Phase 6+ si la lista de flags crece más allá de 6.
+
+**Qué se hizo:**
+- `argos/db/events.py`:
+  - `ALLOWED_METADATA_MUTATIONS: frozenset` con 6 campos permitidos:
+    `metadata.whatsapp_notified`, `metadata.whatsapp_notified_at`,
+    `metadata.email_notified`, `metadata.email_notified_at`,
+    `metadata.escalated`, `metadata.escalated_at`
+  - `MetadataMutationError(ValueError)` para violaciones
+  - `validate_metadata_mutation(update_fields)` — valida que un `$set` solo toque campos permitidos
+- `argos/agents/notifications/service.py`:
+  - Línea 156: `validate_metadata_mutation(set_fields)` llamado ANTES de `update_one` sobre `argos_events`
+- `tests/backend/test_argos_events_metadata_mutation.py`: 17 tests
+  - 8 tests de comportamiento: allowed pass, illegal raises, mixed raises, payload raises, empty pass, error messages
+  - 7 tests de completitud: cada campo del frozenset verificado individualmente + inmutabilidad
+  - 2 tests de análisis estático: AST parse verifica que `notifications/service.py` llama `validate_metadata_mutation` e importa el guard
+
+**ROG cerrada:** ROG-A6 enforzada en código, no solo en documento
+
+---
+
+## Build diferido
+
 ### Build 2.5.8 — Builds 0.6-0.9 cleanup (Langfuse + baseline + credenciales)
 
-**Estado:** 🟡 Pendiente
+**Estado:** ⏸️ Diferido como deuda aceptada · **no bloquea Capa 1**
+
+**Razón del diferimiento:**
+- Los 3 sub-items (Langfuse, credenciales Meta/Google, baseline operativo) requieren decisiones de infra del CEO (Render config, BM RODDOS, MCC RODDOS) y no son prerrequisito para Phase 3 (WhatsApp commerce).
+- Langfuse es observabilidad (valioso pero no gate); credenciales Meta/Google solo se necesitan cuando Media Buyer entre (Capa 5); baseline es captura de métricas que puede hacerse en cualquier momento.
+- Phase 3 puede arrancar sin heredar deuda silenciosa de estos items porque son independientes del muro de carga.
 
 **Pendiente:**
 - Build 0.7: Langfuse self-hosted en Render con PostgreSQL
 - Build 0.8: Formalización System User Meta + Service Account Google
 - Build 0.9: Captura baseline operativo en colección `system_health` + vista `/baseline`
 
-**Bloqueos:** ninguno técnico · requiere decisiones de infra del CEO (Render config, BM RODDOS, MCC RODDOS)
-
----
-
-### Build 2.5.9 — ROG-A6 metadata mutation policy formalizada
-
-**Estado:** 🟡 Pendiente
-
-**Decisión pendiente:** Path A (legalizar mutación con test guard) vs Path B (colección colateral `notifications_dispatch_log`). Recomendación actual: Path A en Phase 2.5.
+**Registrado como deuda en:** `docs/claude/deuda_tecnica.md` (no se crea DT nuevo — items ya estaban documentados como Builds 0.6-0.9 pendientes)
 
 ---
 
@@ -221,6 +247,7 @@
 | ROG-G2 · approval por role | Build 2.5.5 | ✅ |
 | ROG-G3 · audit del aprobador | Build 2.5.5 | ✅ |
 | ROG-S5 · contract test semanal | Build 2.5.6 | ✅ |
+| ROG-A6 · metadata mutation policy | Build 2.5.9 | ✅ |
 
 ---
 
@@ -247,11 +274,11 @@
 - [x] CGO como role nativo + brief_delivery simultáneo CEO+CGO + recommendation approval por role
 - [x] Score Engine contract test en CI semanal funcionando
 - [x] APScheduler persistente con MongoDBJobStore
-- [ ] Langfuse self-hosted operativo (Build 2.5.8)
-- [ ] Baseline operativo en `argos.roddos.com/baseline` (Build 2.5.8)
-- [ ] System User Meta + Service Account Google formalizados (Build 2.5.8)
-- [ ] ROG-A6 metadata mutation policy con test guard (Build 2.5.9)
+- [~] Langfuse self-hosted operativo (Build 2.5.8) — **DIFERIDO** · deuda aceptada · no bloquea Capa 1
+- [~] Baseline operativo en `argos.roddos.com/baseline` (Build 2.5.8) — **DIFERIDO**
+- [~] System User Meta + Service Account Google formalizados (Build 2.5.8) — **DIFERIDO**
+- [x] ROG-A6 metadata mutation policy con test guard (Build 2.5.9)
 - [x] Coverage enforced en CI (`--cov-fail-under=80`) — enforced en módulos críticos
 - [x] DT-004 y DT-025 marcadas resueltas en `deuda_tecnica.md`
-- [ ] Bitácora cerrada con decisiones, errores y aprendizajes ← (este archivo, cierre definitivo pendiente Builds 2.5.8+2.5.9)
-- [ ] Tag `phase-2.5-closed` en el repo ← (después de cerrar 2.5.8+2.5.9)
+- [x] Bitácora cerrada con decisiones, errores y aprendizajes
+- [x] Tag `phase-2.5-closed` en el repo

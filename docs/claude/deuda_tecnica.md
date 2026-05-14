@@ -179,13 +179,20 @@ Edición de queries (toggle, prioridad, agregar): Build 1.2+ añade endpoints `P
 
 ---
 
-## DT-004 · APScheduler in-memory single-instance · no tolera escale horizontal
+## DT-004 · ✅ RESUELTO en Build 2.5.7 · APScheduler persistente con MongoDBJobStore
 
 **Creada:** 2026-04-23 (Phase 1 / Build 1.0)
 **Prioridad:** baja hasta Phase 3+ · media cuando haya 2+ instancias de backend en Render
 **Owner:** @backend
-**Phase objetivo para resolver:** Phase 3+ (cuando WhatsApp Agent obligue a escalar)
-**Estado:** pendiente
+**Phase objetivo para resolver:** Phase 2.5 (adelantado · prioridad subió con Build 2.5.7)
+**Estado:** **resuelto en Build 2.5.7 (2026-05-14)**
+
+**Resolución:**
+- `scheduler.py` migrado a `MongoDBJobStore` cuando `MONGODB_URI` está disponible
+- Job wrappers refactorizados: ya no reciben `db` como arg · usan `_db` de módulo (pickle compat)
+- `misfire_grace_time` configurado explícitamente: 60s jobs daily/6h, 300s jobs frecuentes
+- `MemoryJobStore` explícito como fallback cuando `MONGODB_URI` está vacío (dev/tests)
+- 11 tests nuevos en `tests/backend/test_scheduler.py` cubren: wiring jobs, misfire, jobstore type, pickle compat, error swallowing, y test de integración de restart (skip sin MongoDB real)
 
 ### Contexto
 

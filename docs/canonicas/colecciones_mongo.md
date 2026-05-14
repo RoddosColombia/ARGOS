@@ -34,6 +34,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | `audit_log` | ✅ Indices + writers implementados (Build 2.5.2 cierra ROG-A12) · campo `actor_role` añadido para ROG-G3 | Phase 0 + 2.5 |
 | `apscheduler_jobs` | ✅ Implementada (Build 2.5.7 · cierra DT-004) · MongoDBJobStore de APScheduler · jobs sobreviven restart de proceso | Phase 2.5 |
 | `compliance_envelope` | ✅ Implementada (Build 2.5.4 · cierra ROG-A2 + ROG-A10) · 8 envelopes default sembrados + 3 endpoints + agente ComplianceOfficer | Phase 2.5 |
+| `mercately_polling_state` | ✅ Implementada (Build 3.1 · Capa 1) · last_seen per-phone para inbound poller Mercately | Phase 3 / Capa 1 |
 | `competitor_profiles` | 🟡 Spec · construir Capa 4 (Account intel agent) | Capa 4 |
 | `portfolio_suggestions` | 🟡 Spec · construir Capa 4 (Portfolio agent) | Capa 4 |
 | `sku_canonical_aliases` | 🟡 Spec · construir Capa 4 (SKU canonicalizer) | Capa 4 |
@@ -685,6 +686,21 @@ Persiste el estado de los jobs periódicos entre reinicios del proceso en Render
 **Nota de implementación (Build 2.5.7)**: los job wrappers de `scheduler.py` ya no reciben
 `db: AsyncIOMotorDatabase` como argumento — usan la variable de módulo `_db` en su lugar.
 Esto es necesario porque APScheduler serializa los jobs con pickle, y `AsyncIOMotorDatabase` no es picklable.
+
+## Colección: mercately_polling_state (Build 3.1 · Capa 1)
+
+Estado de polling per-phone del inbound poller de Mercately. Persiste el último mensaje procesado por teléfono para evitar reprocesamiento.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | auto |
+| phone | string | 12 dígitos formato 57XXXXXXXXXX |
+| workspace_id | string | ROG-A3 |
+| last_seen_at | datetime | timestamp del último mensaje inbound procesado |
+| created_at | datetime | primera vez que se polleó este phone |
+| updated_at | datetime | última actualización |
+
+Índices: (phone, workspace_id) unique
 
 ## Colección: deuda_tecnica
 

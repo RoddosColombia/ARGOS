@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     twilio_whatsapp_from: str = Field(default="", alias="TWILIO_WHATSAPP_FROM")
     twilio_whatsapp_to: str = Field(default="", alias="TWILIO_WHATSAPP_TO")
 
+    # Mercately WhatsApp BSP · Build 3.1 (Capa 1)
+    mercately_api_key: str = Field(default="", alias="MERCATELY_API_KEY")
+    mercately_poll_interval_s: int = Field(default=30, alias="MERCATELY_POLL_INTERVAL_S")
+    sismo_inbound_webhook_url: str = Field(default="", alias="SISMO_INBOUND_WEBHOOK_URL")
+    mercately_webhook_secret: str = Field(default="", alias="MERCATELY_WEBHOOK_SECRET")
+
     # Score Engine externo · repo de Iván · ARGOS solo lee resultados
     roddos_mongodb_uri: str = Field(default="", alias="RODDOS_MONGODB_URI")
     roddos_mongodb_database: str = Field(default="roddos_comercial", alias="RODDOS_MONGODB_DATABASE")

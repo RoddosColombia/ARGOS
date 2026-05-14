@@ -106,6 +106,13 @@ ALL_BUILD_2_5_4: tuple[str, ...] = (
     COMPLIANCE_ENVELOPE,
 )
 
+# ─── Build 3.1 Capa 1 (Phase 3 · Mercately inbound poller) ──────────────
+MERCATELY_POLLING_STATE = "mercately_polling_state"
+
+ALL_BUILD_CAPA1: tuple[str, ...] = (
+    MERCATELY_POLLING_STATE,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -121,4 +128,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_CONFIG
     + ALL_BUILD_2_5_3
     + ALL_BUILD_2_5_4
+    + ALL_BUILD_CAPA1
 )

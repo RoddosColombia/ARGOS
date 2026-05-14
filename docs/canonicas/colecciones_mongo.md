@@ -32,7 +32,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | `agent_memory` | ✅ Implementada | Phase 1 (memoria largo plazo) |
 | `agent_sessions` | 🟡 Spec · construir cuando WhatsApp Agent lo requiera | Phase 3 / Capa 1 |
 | `audit_log` | ✅ Indices + writers implementados (Build 2.5.2 cierra ROG-A12) · campo `actor_role` añadido para ROG-G3 | Phase 0 + 2.5 |
-| `apscheduler_jobs` | 🟡 Spec · construir Build 2.5.7 (cierra DT-004) | Phase 2.5 |
+| `apscheduler_jobs` | ✅ Implementada (Build 2.5.7 · cierra DT-004) · MongoDBJobStore de APScheduler · jobs sobreviven restart de proceso | Phase 2.5 |
 | `compliance_envelope` | ✅ Implementada (Build 2.5.4 · cierra ROG-A2 + ROG-A10) · 8 envelopes default sembrados + 3 endpoints + agente ComplianceOfficer | Phase 2.5 |
 | `competitor_profiles` | 🟡 Spec · construir Capa 4 (Account intel agent) | Capa 4 |
 | `portfolio_suggestions` | 🟡 Spec · construir Capa 4 (Portfolio agent) | Capa 4 |
@@ -659,6 +659,32 @@ Estado conversacional de corta duración. TTL index sobre `expires_at`.
 | ip_address | string | si aplica |
 
 Índices: (workspace_id, timestamp_utc) · (workspace_id, actor_id) · (workspace_id, resource_type, resource_id)
+
+## Colección: apscheduler_jobs (Build 2.5.7 · cierra DT-004)
+
+Colección interna de APScheduler · **no leer/escribir directamente desde código de aplicación**.
+Gestionada exclusivamente por `apscheduler.jobstores.mongodb.MongoDBJobStore`.
+Persiste el estado de los jobs periódicos entre reinicios del proceso en Render.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | string | job_id (ej. `scout_tick`, `morning_briefing`) |
+| next_run_time | datetime | próxima ejecución programada |
+| job_state | binary | pickle del objeto Job (scheduler-internal) |
+
+**Configuración:**
+- `host`: `MONGODB_URI` (mismo cluster que el resto de ARGOS)
+- `collection`: `apscheduler_jobs`
+- `coalesce`: True en todos los jobs · si un tick se pierde, solo ejecuta una vez al recuperarse
+- `misfire_grace_time`: 60s para jobs daily/6h · 300s para jobs de alta frecuencia (1h, 30min)
+
+**Comportamiento por entorno:**
+- `MONGODB_URI` configurado (prod/staging): `MongoDBJobStore` · jobs sobreviven restart
+- `MONGODB_URI` vacío (dev sin DB, tests): `MemoryJobStore` · jobs se pierden en restart (aceptable para desarrollo local)
+
+**Nota de implementación (Build 2.5.7)**: los job wrappers de `scheduler.py` ya no reciben
+`db: AsyncIOMotorDatabase` como argumento — usan la variable de módulo `_db` en su lugar.
+Esto es necesario porque APScheduler serializa los jobs con pickle, y `AsyncIOMotorDatabase` no es picklable.
 
 ## Colección: deuda_tecnica
 

@@ -48,6 +48,7 @@ addopts = "-v --strict-markers"
 pythonpath = ["src/backend", "."]
 markers = [
     "contract: tests de contrato vs servicios externos (score engine, partners). Requieren env vars reales.",
+    "integration: tests de integración que requieren servicios externos reales (MongoDB, APIs). Se saltan sin env vars.",
 ]
 
 [tool.ruff]

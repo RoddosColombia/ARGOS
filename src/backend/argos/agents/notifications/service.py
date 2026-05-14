@@ -19,6 +19,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from argos.agents.strategist.service import MorningBriefing
 from argos.config import get_settings
 from argos.db import collections as col
+from argos.db.events import validate_metadata_mutation
 from argos.partners.twilio.client import TwilioError, TwilioWhatsAppClient
 
 logger = logging.getLogger("argos.agents.notifications")
@@ -150,12 +151,14 @@ async def notify_recent_price_alerts(
         try:
             await agent.send(text)
             sent += 1
+            set_fields = {
+                "metadata.whatsapp_notified": True,
+                "metadata.whatsapp_notified_at": datetime.now(tz=UTC),
+            }
+            validate_metadata_mutation(set_fields)
             await db[col.ARGOS_EVENTS].update_one(
                 {"_id": ev["_id"]},
-                {"$set": {
-                    "metadata.whatsapp_notified": True,
-                    "metadata.whatsapp_notified_at": datetime.now(tz=UTC),
-                }},
+                {"$set": set_fields},
             )
         except TwilioError:
             logger.exception("price_alert_whatsapp_failed", extra={"event_id": ev.get("event_id")})

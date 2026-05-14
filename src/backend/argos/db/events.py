@@ -17,9 +17,43 @@ logger = logging.getLogger("argos.db.events")
 
 EVENT_SCHEMA_VERSION = "1.0"
 
+# ---------------------------------------------------------------------------
+# ROG-A6 metadata mutation policy (Build 2.5.9)
+#
+# El bus argos_events es append-only en payload. Mutación de metadata está
+# permitida SOLO para los campos listados abajo (flags de notification dispatch).
+# Cualquier otro campo mutado en metadata es violación de ROG-A6.
+# ---------------------------------------------------------------------------
+ALLOWED_METADATA_MUTATIONS: frozenset[str] = frozenset({
+    "metadata.whatsapp_notified",
+    "metadata.whatsapp_notified_at",
+    "metadata.email_notified",
+    "metadata.email_notified_at",
+    "metadata.escalated",
+    "metadata.escalated_at",
+})
+
 
 class EventValidationError(ValueError):
     """Raised cuando un evento no cumple el schema mínimo."""
+
+
+class MetadataMutationError(ValueError):
+    """Raised cuando se intenta mutar un campo de metadata no permitido por ROG-A6."""
+
+
+def validate_metadata_mutation(update_fields: dict[str, object]) -> None:
+    """Valida que un $set sobre argos_events solo toque campos permitidos.
+
+    Recibe el dict que iría dentro de {"$set": {...}} en un update_one/update_many.
+    Lanza MetadataMutationError si algún campo no está en ALLOWED_METADATA_MUTATIONS.
+    """
+    illegal = {k for k in update_fields if k not in ALLOWED_METADATA_MUTATIONS}
+    if illegal:
+        raise MetadataMutationError(
+            f"ROG-A6 violation: campos no permitidos en metadata mutation: {sorted(illegal)}. "
+            f"Permitidos: {sorted(ALLOWED_METADATA_MUTATIONS)}"
+        )
 
 
 def _validate(event_type: str, workspace_id: str, producer: str, payload: dict[str, Any]) -> None:

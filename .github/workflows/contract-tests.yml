@@ -1,0 +1,75 @@
+name: Score Engine · Contract Test
+
+# ROG-S5: test de contrato semanal valida que el response del Score Engine
+# sigue cumpliendo el schema v1 documentado en docs/canonicas/score_engine_contract.md.
+# Si falla, notifica antes de que un cambio breaking rompa producción.
+#
+# Refs: phase_2.5/build_2.5.6
+
+on:
+  schedule:
+    # Lunes 06:00 UTC · antes del horario laboral Bogotá (01:00 AM GMT-5)
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      notify_on_success:
+        description: "Notificar también en éxito (para validación manual)"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: contract-tests
+  cancel-in-progress: false
+
+jobs:
+  score-engine-contract:
+    name: Score Engine · schema v1 contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run contract tests
+        env:
+          SCORE_ENGINE_API_URL: ${{ secrets.SCORE_ENGINE_API_URL }}
+          SCORE_ENGINE_API_KEY: ${{ secrets.SCORE_ENGINE_API_KEY }}
+        run: |
+          pytest tests/contract/test_score_engine_contract.py \
+            -v \
+            -m contract \
+            --tb=short \
+            --no-header
+
+      - name: Notify on failure
+        if: failure() && env.CONTRACT_TEST_NOTIFY_URL != ''
+        env:
+          CONTRACT_TEST_NOTIFY_URL: ${{ secrets.CONTRACT_TEST_NOTIFY_URL }}
+        run: |
+          curl -s -X POST "$CONTRACT_TEST_NOTIFY_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "🚨 *Score Engine contract test FALLÓ* · Schema v1 tiene drift vs `roddos-scoring`.\nRevisar `docs/canonicas/score_engine_contract.md` + coordinar con CGO (Iván Echeverri) antes del próximo deploy.\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }' || true
+
+      - name: Notify on success (manual trigger only)
+        if: success() && github.event.inputs.notify_on_success == 'true' && env.CONTRACT_TEST_NOTIFY_URL != ''
+        env:
+          CONTRACT_TEST_NOTIFY_URL: ${{ secrets.CONTRACT_TEST_NOTIFY_URL }}
+        run: |
+          curl -s -X POST "$CONTRACT_TEST_NOTIFY_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "✅ Score Engine contract test OK · Schema v1 validado correctamente."
+            }' || true

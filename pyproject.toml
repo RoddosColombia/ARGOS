@@ -46,6 +46,9 @@ testpaths = ["tests/backend"]
 asyncio_mode = "auto"
 addopts = "-v --strict-markers"
 pythonpath = ["src/backend", "."]
+markers = [
+    "contract: tests de contrato vs servicios externos (score engine, partners). Requieren env vars reales.",
+]
 
 [tool.ruff]
 line-length = 120

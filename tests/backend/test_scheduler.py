@@ -62,6 +62,7 @@ def test_build_scheduler_registers_all_expected_jobs() -> None:
         "price_alert_whatsapp",
         "impact_evaluation",
         "memory_embed",
+        "mercately_inbound_poll",
     }
     registered = {job.id for job in scheduler.get_jobs()}
     assert expected_ids == registered, (

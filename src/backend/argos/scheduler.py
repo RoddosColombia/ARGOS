@@ -37,6 +37,7 @@ from argos.agents.sismo.service import (
 from argos.agents.social.service import refresh_social
 from argos.agents.strategist.impact import evaluate_pending_recommendations
 from argos.agents.trends.service import refresh_trends
+from argos.agents.whatsapp.inbound_poller import poll_inbound
 
 logger = logging.getLogger("argos.scheduler")
 
@@ -162,6 +163,25 @@ async def _impact_evaluation_job() -> None:
         logger.info("scheduled_impact_evaluation", extra=stats)
     except Exception:  # noqa: BLE001
         logger.exception("scheduled_impact_evaluation_failed")
+
+
+async def _mercately_inbound_poll_job() -> None:
+    try:
+        from argos.config import get_settings
+        from argos.partners.mercately.client import MercatelyClient
+
+        settings = get_settings()
+        async with MercatelyClient(api_key=settings.mercately_api_key) as client:
+            stats = await poll_inbound(
+                _db,
+                mercately_client=client,
+                anthropic_api_key=settings.anthropic_api_key,
+                sismo_webhook_url=settings.sismo_inbound_webhook_url,
+                webhook_secret=settings.mercately_webhook_secret,
+            )
+        logger.info("scheduled_mercately_inbound_poll", extra=stats)
+    except Exception:  # noqa: BLE001
+        logger.exception("scheduled_mercately_inbound_poll_failed")
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +376,21 @@ def build_scheduler(
         coalesce=COALESCE_DEFAULT,
         misfire_grace_time=MISFIRE_GRACE_DAILY,
     )
+
+    # Mercately inbound poller · cada MERCATELY_POLL_INTERVAL_S (default 30s)
+    from argos.config import get_settings as _gs
+    poll_s = _gs().mercately_poll_interval_s
+    if poll_s > 0:
+        scheduler.add_job(
+            _mercately_inbound_poll_job,
+            trigger=IntervalTrigger(seconds=poll_s),
+            id="mercately_inbound_poll",
+            name="Mercately inbound poll · WhatsApp messages → intent classify → route",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=COALESCE_DEFAULT,
+            misfire_grace_time=MISFIRE_GRACE_FREQUENT,
+        )
 
     return scheduler
 

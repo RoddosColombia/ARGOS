@@ -63,3 +63,51 @@ Bitácora de la primera capa de Phase 3: integración Mercately + routing de men
 ### Estado: ✅ CERRADO
 
 Tests: 154 passed (48 nuevos), 0 failed. Lint clean. Suite total del repo: 154+ tests.
+
+---
+
+## Build 3.2 · WhatsApp Agent conversacional — cotización de repuestos (2026-05-15)
+
+**Objetivo:** Cerrar el gap donde ARGOS clasifica mensajes inbound pero no responde. Implementar el conversation handler que despacha respuestas por intent y el catalog search que busca productos en products_catalog enriquecidos con stock SISMO.
+
+**Refs:** ROG-W6, ROG-W7
+
+### Entregables
+
+1. **`argos/agents/whatsapp/catalog_search.py`** — Búsqueda de catálogo para cotización
+   - `_build_search_regex(query_text)` — keywords ≥ 3 chars, regex OR por palabra
+   - `_get_latest_sync_date(db, workspace_id)` — fecha más reciente de sismo_inventory
+   - `_get_sismo_stock(db, workspace_id, product_names, fecha)` — match fuzzy por nombre contra sismo_inventory
+   - `search_catalog(db, query_text, workspace_id)` — búsqueda principal, retorna lista con nombre, precio, stock, stock_source (sismo|catalog), source, categoria, compatible_motos, permalink
+   - MAX_RESULTS=5, MIN_QUERY_LENGTH=3 (filtra stopwords españolas de 2 letras: de, en, el)
+
+2. **`argos/agents/whatsapp/conversation_handler.py`** — Dispatch por intent
+   - `_format_product_response(products, query)` — formato WhatsApp con precio formateado, stock, motos compatibles
+   - `_format_moto_placeholder()` / `_format_credit_placeholder()` / `_format_onboarding()` — templates estáticas
+   - `_generate_general_response(message_text, anthropic_api_key)` — respuesta via Haiku 4.5 con system prompt RODDOS; fallback estático sin API key
+   - `_register_contact(db, phone, workspace_id)` — upsert contacto con opt_in_whatsapp=True y opt_in_marketing nested
+   - `_emit_response_event(db, ...)` — emite `whatsapp.message.responded` al bus argos_events
+   - `handle_message(db, *, classification, message_text, phone, mercately_client, ...)` — dispatch principal, retorna `{responded, intent, outcome, response_preview}`
+   - Outcomes ROG-W7: cotizado, sin_resultado, respondido_general, placeholder_moto, placeholder_credito, onboarding_nuevo, onboarding_existente, fallback, send_failed
+
+3. **Integración `inbound_poller.py`** — Bloque `elif route_to == "argos" and whatsapp_reply_enabled` que llama `handle_message()` y contabiliza en `responded_argos`
+
+4. **Safety switch:** `ARGOS_WHATSAPP_REPLY_ENABLED` (bool, default False) en config.py — clasifica pero no responde hasta habilitación explícita
+
+5. **Scheduler:** `_mercately_inbound_poll_job()` pasa `whatsapp_reply_enabled=settings.whatsapp_reply_enabled` a `poll_inbound()`
+
+### Tests (20 nuevos)
+
+- `test_catalog_search.py` — 8 tests: regex building (single/multi/short/empty), search vacío, sin matches, con SISMO enrichment, fallback a catalog stock
+- `test_conversation_handler.py` — 12 tests: format con/sin productos, out of stock, handle cotizar con/sin resultados, consulta general sin API key, onboarding crea contacto, placeholders moto/crédito, mercately disabled, poller reply enabled/disabled
+
+### ROGs cumplidas
+- ROG-W6: cada conversación tiene goal medible (outcome obligatorio)
+- ROG-W7: outcomes tipados en cada respuesta
+- ROG-W3: stock verificado contra SISMO antes de cotizar
+- ROG-A3: workspace_id en todas las queries
+- ROG-A7: stateless handler, eventos al bus
+
+### Estado: ✅ CERRADO
+
+Tests: 174 passed (20 nuevos), 0 failed. Lint clean. Suite total del repo: 174 passed, 153 skipped.

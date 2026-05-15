@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     mercately_poll_interval_s: int = Field(default=30, alias="MERCATELY_POLL_INTERVAL_S")
     sismo_inbound_webhook_url: str = Field(default="", alias="SISMO_INBOUND_WEBHOOK_URL")
     mercately_webhook_secret: str = Field(default="", alias="MERCATELY_WEBHOOK_SECRET")
+    whatsapp_reply_enabled: bool = Field(default=False, alias="ARGOS_WHATSAPP_REPLY_ENABLED")
 
     # Score Engine externo · repo de Iván · ARGOS solo lee resultados
     roddos_mongodb_uri: str = Field(default="", alias="RODDOS_MONGODB_URI")

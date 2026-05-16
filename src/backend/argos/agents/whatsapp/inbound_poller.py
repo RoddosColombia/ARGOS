@@ -18,6 +18,7 @@ from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from argos.agents.whatsapp.conversation_handler import handle_message
 from argos.agents.whatsapp.intent_classifier import classify_intent
 from argos.agents.whatsapp.sismo_forwarder import forward_to_sismo
 from argos.db import collections as col
@@ -108,16 +109,19 @@ async def poll_inbound(
     anthropic_api_key: str = "",
     sismo_webhook_url: str = "",
     webhook_secret: str = "",
+    whatsapp_reply_enabled: bool = False,
 ) -> dict[str, int]:
     """Ejecuta un ciclo de polling completo.
 
-    Retorna stats: {phones_checked, messages_found, classified, forwarded_sismo, errors}.
+    Retorna stats: {phones_checked, messages_found, classified, forwarded_sismo,
+    responded_argos, errors}.
     """
     stats: dict[str, int] = {
         "phones_checked": 0,
         "messages_found": 0,
         "classified": 0,
         "forwarded_sismo": 0,
+        "responded_argos": 0,
         "errors": 0,
     }
 
@@ -166,6 +170,18 @@ async def poll_inbound(
                         workspace_id=workspace_id,
                     )
                     stats["forwarded_sismo"] += 1
+
+                elif result.route_to == "argos" and whatsapp_reply_enabled:
+                    await handle_message(
+                        db,
+                        classification=result,
+                        message_text=text,
+                        phone=phone,
+                        mercately_client=mercately_client,
+                        anthropic_api_key=anthropic_api_key,
+                        workspace_id=workspace_id,
+                    )
+                    stats["responded_argos"] += 1
 
                 if latest_time is None or msg_time > latest_time:
                     latest_time = msg_time

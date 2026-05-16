@@ -178,6 +178,7 @@ async def _mercately_inbound_poll_job() -> None:
                 anthropic_api_key=settings.anthropic_api_key,
                 sismo_webhook_url=settings.sismo_inbound_webhook_url,
                 webhook_secret=settings.mercately_webhook_secret,
+                whatsapp_reply_enabled=settings.whatsapp_reply_enabled,
             )
         logger.info("scheduled_mercately_inbound_poll", extra=stats)
     except Exception:  # noqa: BLE001

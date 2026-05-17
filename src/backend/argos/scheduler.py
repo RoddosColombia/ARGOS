@@ -169,9 +169,16 @@ async def _mercately_inbound_poll_job() -> None:
     try:
         from argos.config import get_settings
         from argos.partners.mercately.client import MercatelyClient
+        from argos.partners.wava.client import WavaClient
 
         settings = get_settings()
-        async with MercatelyClient(api_key=settings.mercately_api_key) as client:
+        async with (
+            MercatelyClient(api_key=settings.mercately_api_key) as client,
+            WavaClient(
+                merchant_key=settings.wava_merchant_key,
+                base_url=settings.wava_api_url,
+            ) as wava,
+        ):
             stats = await poll_inbound(
                 _db,
                 mercately_client=client,
@@ -179,6 +186,7 @@ async def _mercately_inbound_poll_job() -> None:
                 sismo_webhook_url=settings.sismo_inbound_webhook_url,
                 webhook_secret=settings.mercately_webhook_secret,
                 whatsapp_reply_enabled=settings.whatsapp_reply_enabled,
+                wava_client=wava,
             )
         logger.info("scheduled_mercately_inbound_poll", extra=stats)
     except Exception:  # noqa: BLE001

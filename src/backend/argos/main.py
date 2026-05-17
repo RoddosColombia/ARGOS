@@ -23,6 +23,7 @@ from argos.api.v1.scout import router as scout_router
 from argos.api.v1.sismo import router as sismo_router
 from argos.api.v1.social import router as social_router
 from argos.api.v1.trends import router as trends_router
+from argos.api.v1.wava_webhook import router as wava_webhook_router
 from argos.auth.router import router as auth_router
 from argos.auth.user_store import EnvUserStore, MongoUserStore, set_user_store
 from argos.config import get_settings
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(score_router)
     app.include_router(contacts_router)
     app.include_router(compliance_router)
+    app.include_router(wava_webhook_router)
 
     return app
 

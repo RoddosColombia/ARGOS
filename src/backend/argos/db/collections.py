@@ -113,6 +113,13 @@ ALL_BUILD_CAPA1: tuple[str, ...] = (
     MERCATELY_POLLING_STATE,
 )
 
+# ─── Build 3.3 Capa 1 (Phase 3 · Wava payment orders) ──────────────────
+WAVA_ORDERS = "wava_orders"
+
+ALL_BUILD_CAPA1_WAVA: tuple[str, ...] = (
+    WAVA_ORDERS,
+)
+
 # Unión · útil para fixtures de teardown
 ALL_KNOWN: tuple[str, ...] = (
     ALL_BUILD_0_3
@@ -129,4 +136,5 @@ ALL_KNOWN: tuple[str, ...] = (
     + ALL_BUILD_2_5_3
     + ALL_BUILD_2_5_4
     + ALL_BUILD_CAPA1
+    + ALL_BUILD_CAPA1_WAVA
 )

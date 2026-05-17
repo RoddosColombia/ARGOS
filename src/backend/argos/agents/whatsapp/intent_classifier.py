@@ -31,6 +31,7 @@ ARGOS_INTENTS = frozenset({
     "consulta_credito",
     "consulta_general",
     "onboarding",
+    "confirmar_compra",
 })
 
 SISMO_INTENTS = frozenset({
@@ -54,6 +55,7 @@ ARGOS (repuestos, motos, crédito nuevo, consultas generales):
 - consulta_credito: cliente pregunta por financiación o crédito nuevo
 - consulta_general: saludo, pregunta general, catálogo, horarios
 - onboarding: cliente nuevo que quiere registrarse
+- confirmar_compra: cliente acepta cotización, quiere comprar, confirma pedido
 
 SISMO (cobranza, pagos, mora, soporte de crédito existente):
 - pago_cuota: cliente quiere pagar cuota o informa de pago realizado

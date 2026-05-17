@@ -35,6 +35,7 @@ Schemas de cada colección MongoDB en el cluster argos-prod.
 | `apscheduler_jobs` | ✅ Implementada (Build 2.5.7 · cierra DT-004) · MongoDBJobStore de APScheduler · jobs sobreviven restart de proceso | Phase 2.5 |
 | `compliance_envelope` | ✅ Implementada (Build 2.5.4 · cierra ROG-A2 + ROG-A10) · 8 envelopes default sembrados + 3 endpoints + agente ComplianceOfficer | Phase 2.5 |
 | `mercately_polling_state` | ✅ Implementada (Build 3.1 · Capa 1) · last_seen per-phone para inbound poller Mercately | Phase 3 / Capa 1 |
+| `wava_orders` | ✅ Implementada (Build 3.3 · Capa 1) · órdenes de pago Wava (Nequi/Daviplata) | Phase 3 / Capa 1 |
 | `competitor_profiles` | 🟡 Spec · construir Capa 4 (Account intel agent) | Capa 4 |
 | `portfolio_suggestions` | 🟡 Spec · construir Capa 4 (Portfolio agent) | Capa 4 |
 | `sku_canonical_aliases` | 🟡 Spec · construir Capa 4 (SKU canonicalizer) | Capa 4 |
@@ -727,3 +728,39 @@ Estado de polling per-phone del inbound poller de Mercately. Persiste el último
 | status | enum | healthy/degraded/down |
 | details | object | |
 | metrics | object | {response_time_ms, error_rate, etc.} |
+
+## Colección: wava_orders (Build 3.3 · Capa 1 · órdenes de pago Wava)
+
+Órdenes de pago creadas vía Wava (Nequi/Daviplata) desde el flujo WhatsApp de cotización. Idempotente por `(workspace_id, order_key)`.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| _id | ObjectId | auto |
+| workspace_id | string | ROG-A3 |
+| order_key | string | idempotency key · formato `wa-{workspace}-{phone}-{uuid12}` |
+| wava_order_id | string | ID devuelto por Wava (POST /v1/orders response) |
+| phone | string | 12 dígitos formato 57XXXXXXXXXX |
+| amount | int | COP sin decimales |
+| description | string | descripción de la orden |
+| gateway | string | `nequi` / `daviplata` |
+| status | enum | `pending` → `confirmed` → `invoiced` \| `failed` \| `cancelled` \| `refunded` |
+| wava_confirmed_at | datetime nullable | timestamp de confirmación de pago |
+| wava_failed_at | datetime nullable | timestamp de fallo |
+| wava_cancelled_at | datetime nullable | timestamp de cancelación |
+| wava_refunded_at | datetime nullable | timestamp de reembolso |
+| created_at | datetime | `$setOnInsert` |
+| updated_at | datetime | última actualización |
+
+Índices:
+- `(workspace_id, order_key)` **unique** — `workspace_order_key_unique` (idempotencia)
+- `(workspace_id, status)` — `workspace_status` (filtros por estado)
+- `(workspace_id, wava_order_id)` — `workspace_wava_order_id` (lookup por webhook)
+
+**Flujo:**
+1. Cliente acepta cotización en WhatsApp → `confirmar_compra` intent
+2. `conversation_handler._create_wava_order()` crea orden Wava + persiste con `status=pending`
+3. Wava envía webhook a `POST /api/v1/wava/webhook`
+4. Webhook verifica via `GET /v1/orders/{id}` (no confía en payload) → actualiza status
+5. Evento `wava.payment.confirmed/failed/cancelled` emitido al bus
+
+**Seguridad:** Wava NO envía HMAC en webhooks. Verificación obligatoria vía GET antes de procesar.

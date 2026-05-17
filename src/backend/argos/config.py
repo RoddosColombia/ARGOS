@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     mercately_webhook_secret: str = Field(default="", alias="MERCATELY_WEBHOOK_SECRET")
     whatsapp_reply_enabled: bool = Field(default=False, alias="ARGOS_WHATSAPP_REPLY_ENABLED")
 
+    # Wava · pasarela Nequi/Daviplata · Build 3.3 (Capa 1)
+    wava_merchant_key: str = Field(default="", alias="WAVA_MERCHANT_KEY")
+    wava_api_url: str = Field(default="https://api.dev.wava.co/v1", alias="WAVA_API_URL")
+
     # Score Engine externo · repo de Iván · ARGOS solo lee resultados
     roddos_mongodb_uri: str = Field(default="", alias="RODDOS_MONGODB_URI")
     roddos_mongodb_database: str = Field(default="roddos_comercial", alias="RODDOS_MONGODB_DATABASE")

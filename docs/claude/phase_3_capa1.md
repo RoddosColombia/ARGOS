@@ -111,3 +111,72 @@ Tests: 154 passed (48 nuevos), 0 failed. Lint clean. Suite total del repo: 154+ 
 ### Estado: ✅ CERRADO
 
 Tests: 174 passed (20 nuevos), 0 failed. Lint clean. Suite total del repo: 174 passed, 153 skipped.
+
+---
+
+## Build 3.3 · WavaClient + webhook receiver + orden de pago (2026-05-16)
+
+**Objetivo:** Integrar Wava como pasarela de pago Nequi/Daviplata. Crear el flujo cotización → confirmar_compra → orden Wava → webhook de confirmación.
+
+**Contexto técnico Wava:**
+- Auth: header `merchant-key` con WAVA_MERCHANT_KEY
+- URL dev: `https://api.dev.wava.co/v1` · URL prod: `https://api.wava.co/v1`
+- Webhooks: Wava hace POST a URL configurada en su dashboard. NO envía HMAC — verificación obligatoria vía GET /v1/orders/{id}
+- Idempotency: campo `order_key` en el body del POST
+- Gateway principal: Nequi (id=1)
+
+### Entregables
+
+1. **`argos/partners/wava/client.py`** — WavaClient async
+   - `create_order(amount, description, shopper, gateway_id, order_key)` → POST /v1/orders
+   - `get_order(order_id)` → GET /v1/orders/{orderId}
+   - `get_gateways()` → GET /v1/orders/paymentGateways
+   - `submit_daviplata_otp(order_id, otp)` → POST /v1/orders/{id}/daviplata-otp
+   - `WavaShopper` dataclass con campos requeridos por Wava
+   - `WavaOrder` dataclass con `from_response()` parser
+   - Skip silencioso sin `WAVA_MERCHANT_KEY`
+   - Context manager async (mismo pattern que MercatelyClient)
+
+2. **`argos/api/v1/wava_webhook.py`** — Endpoint receptor
+   - POST /api/v1/wava/webhook responde 200 inmediatamente (<5 seg)
+   - Procesa en background: verifica status vía GET, actualiza wava_orders, emite eventos
+   - Idempotente por wava_order_id
+   - Eventos: `wava.payment.confirmed`, `wava.payment.failed`, `wava.payment.cancelled`, `wava.payment.refunded`
+   - Audit log en cada webhook recibido + procesado (ROG-A12)
+   - Exento de WorkspaceIdMiddleware (webhook público)
+
+3. **Intent `confirmar_compra`** agregado al IntentClassifier (6 ARGOS intents ahora)
+   - Prompt del classifier actualizado con nueva intención
+   - Handler en conversation_handler.py:
+     a) Lee datos del contacto (nombre, cédula, phone, email)
+     b) Valida datos completos (cédula obligatoria)
+     c) Crea orden Wava con gateway Nequi
+     d) Persiste en wava_orders con status pending
+     e) Responde por WhatsApp con instrucciones de aprobación Nequi
+   - Outcomes nuevos ROG-W7: orden_creada, datos_incompletos, contacto_no_encontrado, wava_no_disponible, wava_error
+
+4. **Collection `wava_orders`** con esquema completo en colecciones_mongo.md
+   - Índices: (workspace_id, order_key) unique, (workspace_id, status), (workspace_id, wava_order_id)
+
+5. **Config:** `WAVA_MERCHANT_KEY`, `WAVA_API_URL` (default https://api.dev.wava.co/v1)
+
+6. **Integración:**
+   - Router registrado en main.py
+   - Scheduler pasa WavaClient al poll_inbound job
+   - inbound_poller pasa wava_client al handle_message
+
+### Tests (32 nuevos)
+
+- `test_wava_client.py` — 14 tests: shopper, order dataclass, enabled/skip, context manager, create_order, get_order, get_gateways, error handling, daviplata OTP, merchant-key header
+- `test_wava_webhook.py` — 8 tests: webhook 200 inmediato, invalid JSON, confirmed/failed/order not found/no merchant key/no order id, audit log
+- `test_wava_order_flow.py` — 10 tests: doc_type mapping, wava disabled/no contact/missing cédula/order created/wava error, persist correctness, intent in ARGOS_INTENTS
+
+### ROGs cumplidas
+- ROG-A1: pago requiere aprobación humana en Nequi (Wava no auto-cobra)
+- ROG-A3: workspace_id en todas las queries
+- ROG-A12: audit log en cada webhook recibido + procesado
+- ROG-W7: outcomes tipados obligatorios en confirmar_compra
+
+### Estado: ✅ CERRADO
+
+Tests: 206 passed (32 nuevos), 0 failed. Lint clean. Suite total del repo: 206 passed, 153 skipped.

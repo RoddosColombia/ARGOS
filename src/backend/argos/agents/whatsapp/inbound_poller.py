@@ -23,6 +23,7 @@ from argos.agents.whatsapp.intent_classifier import classify_intent
 from argos.agents.whatsapp.sismo_forwarder import forward_to_sismo
 from argos.db import collections as col
 from argos.partners.mercately.client import MercatelyClient
+from argos.partners.wava.client import WavaClient
 
 logger = logging.getLogger("argos.agents.whatsapp.inbound_poller")
 
@@ -110,6 +111,7 @@ async def poll_inbound(
     sismo_webhook_url: str = "",
     webhook_secret: str = "",
     whatsapp_reply_enabled: bool = False,
+    wava_client: WavaClient | None = None,
 ) -> dict[str, int]:
     """Ejecuta un ciclo de polling completo.
 
@@ -180,6 +182,7 @@ async def poll_inbound(
                         mercately_client=mercately_client,
                         anthropic_api_key=anthropic_api_key,
                         workspace_id=workspace_id,
+                        wava_client=wava_client,
                     )
                     stats["responded_argos"] += 1
 

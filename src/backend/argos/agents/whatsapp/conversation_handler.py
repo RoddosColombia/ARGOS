@@ -1,4 +1,4 @@
-"""Conversation handler · responde mensajes inbound ARGOS (Build 3.2).
+"""Conversation handler · responde mensajes inbound ARGOS (Build 3.2 + 3.3).
 
 Recibe ClassificationResult + mensaje + phone y despacha la respuesta
 según el intent. Envía respuestas vía MercatelyClient.send_text.
@@ -9,6 +9,7 @@ Intents manejados:
 - cotizar_moto: placeholder (F2 es Capa 3)
 - onboarding: registra contacto con opt-in
 - consulta_credito: placeholder (F3 es Capa 3)
+- confirmar_compra: crea orden Wava (Nequi) + persiste en wava_orders (Build 3.3)
 
 Cada respuesta emite evento whatsapp.message.responded al bus (ROG-W7).
 
@@ -17,6 +18,7 @@ Refs: phase_3/build_3.2 · ROG-W6 · ROG-W7
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +28,7 @@ from argos.agents.whatsapp.catalog_search import search_catalog
 from argos.agents.whatsapp.intent_classifier import ClassificationResult
 from argos.db import collections as col
 from argos.partners.mercately.client import MercatelyClient
+from argos.partners.wava.client import WavaClient, WavaError, WavaShopper
 
 logger = logging.getLogger("argos.agents.whatsapp.conversation_handler")
 
@@ -197,6 +200,121 @@ async def _emit_response_event(
         logger.exception("response_event_publish_failed")
 
 
+async def _get_contact(
+    db: AsyncIOMotorDatabase,
+    phone: str,
+    workspace_id: str,
+) -> dict[str, Any] | None:
+    """Lee datos del contacto para crear orden Wava."""
+    return await db[col.CONTACTS].find_one(
+        {"workspace_id": workspace_id, "phone": phone},
+        {
+            "phone": 1,
+            "nombre_completo": 1,
+            "email": 1,
+            "numero_documento": 1,
+            "tipo_documento": 1,
+            "_id": 0,
+        },
+    )
+
+
+def _doc_type_to_wava_id(tipo: str) -> int:
+    mapping = {"CC": 1, "CE": 2, "TI": 3}
+    return mapping.get(tipo, 1)
+
+
+async def _create_wava_order(
+    db: AsyncIOMotorDatabase,
+    *,
+    phone: str,
+    contact: dict[str, Any],
+    workspace_id: str,
+    wava_client: WavaClient,
+) -> tuple[str, str]:
+    """Crea orden Wava Nequi para la última cotización del contacto.
+
+    Retorna (response_text, outcome).
+    """
+    nombre = contact.get("nombre_completo", "")
+    parts = nombre.split(" ", 1) if nombre else ["Cliente", ""]
+    first_name = parts[0] or "Cliente"
+    last_name = parts[1] if len(parts) > 1 else ""
+    email = contact.get("email", "")
+    cedula = contact.get("numero_documento", "")
+    tipo_doc = contact.get("tipo_documento", "CC")
+
+    if not cedula:
+        return (
+            "Para procesar tu compra necesitamos tu número de cédula. "
+            "¿Podrías compartirlo por favor?",
+            "datos_incompletos",
+        )
+
+    phone_e164 = f"+{phone}" if not phone.startswith("+") else phone
+
+    shopper = WavaShopper(
+        first_name=first_name,
+        last_name=last_name,
+        email=email or f"{phone}@noreply.roddos.com",
+        phone_number=phone_e164,
+        country="CO",
+        id_number=cedula,
+        id_type=_doc_type_to_wava_id(tipo_doc),
+    )
+
+    order_key = f"wa-{workspace_id}-{phone}-{uuid.uuid4().hex[:12]}"
+
+    # TODO: amount should come from the actual quoted product
+    # For now we use a placeholder amount that will be replaced
+    # when we implement the full quotation-to-order flow
+    amount = 0
+
+    try:
+        wava_order = await wava_client.create_order(
+            amount=amount,
+            description=f"Compra WhatsApp · {phone}",
+            shopper=shopper,
+            gateway_id=1,
+            order_key=order_key,
+        )
+    except WavaError:
+        logger.exception("wava_order_creation_failed", extra={"phone": phone[-4:]})
+        return (
+            "Tuvimos un problema al generar tu solicitud de pago. "
+            "Por favor intenta de nuevo en unos minutos.",
+            "wava_error",
+        )
+
+    now = datetime.now(tz=UTC)
+    await db[col.WAVA_ORDERS].update_one(
+        {"workspace_id": workspace_id, "order_key": order_key},
+        {
+            "$set": {
+                "wava_order_id": wava_order.order_id,
+                "phone": phone,
+                "amount": amount,
+                "description": f"Compra WhatsApp · {phone}",
+                "gateway": "nequi",
+                "status": "pending",
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "workspace_id": workspace_id,
+                "order_key": order_key,
+                "created_at": now,
+            },
+        },
+        upsert=True,
+    )
+
+    return (
+        "Te enviamos la solicitud de pago a tu Nequi. "
+        "Apruébala en tu app para confirmar la compra. 📱✅",
+        "orden_creada",
+    )
+
+
 async def handle_message(
     db: AsyncIOMotorDatabase,
     *,
@@ -206,6 +324,7 @@ async def handle_message(
     mercately_client: MercatelyClient,
     anthropic_api_key: str = "",
     workspace_id: str = "RODDOS",
+    wava_client: WavaClient | None = None,
 ) -> dict[str, Any]:
     """Despacha respuesta según intent clasificado.
 
@@ -238,6 +357,30 @@ async def handle_message(
         created = await _register_contact(db, phone, workspace_id)
         response_text = _format_onboarding()
         outcome = "onboarding_nuevo" if created else "onboarding_existente"
+
+    elif intent == "confirmar_compra":
+        if wava_client is None or not wava_client.enabled:
+            response_text = (
+                "La pasarela de pago no está disponible en este momento. "
+                "Por favor intenta más tarde o visítanos en tienda."
+            )
+            outcome = "wava_no_disponible"
+        else:
+            contact = await _get_contact(db, phone, workspace_id)
+            if not contact:
+                response_text = (
+                    "No encontramos tu información registrada. "
+                    "¿Podrías decirnos tu nombre completo y número de cédula?"
+                )
+                outcome = "contacto_no_encontrado"
+            else:
+                response_text, outcome = await _create_wava_order(
+                    db,
+                    phone=phone,
+                    contact=contact,
+                    workspace_id=workspace_id,
+                    wava_client=wava_client,
+                )
 
     else:
         response_text = (
